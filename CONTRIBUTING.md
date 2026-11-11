@@ -63,4 +63,6 @@ The core assumes Claude Code's transcripts. Another source (for example Cowork's
 
 ## Reporting a security problem
 
-Please do not open a public issue. Use GitHub's private vulnerability reporting on the repository's Security tab.
+Please do not open a public issue. See [SECURITY.md](SECURITY.md): it explains how to report privately, and what Vigie protects against.
+
+Workflows are guarded by `test/workflows.test.ts`: actions are pinned to a commit (Dependabot keeps the pins and their version comments up to date), no event field goes inside a shell script, and only the job that publishes a release can write.
