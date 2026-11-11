@@ -54,6 +54,8 @@ input[type="text"]:focus, input[type="search"]:focus { background: var(--card); 
   display: flex; flex-direction: column; overflow: auto; padding: 12px 10px;
   background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
 }
+.side-top { display: flex; align-items: center; justify-content: space-between; }
+.side-close { display: none; padding: 2px 9px; margin: -8px 2px 0 0; }
 .brand { display: flex; align-items: center; gap: 9px; padding: 4px 10px 14px; font-size: 17px; font-weight: 650; letter-spacing: .01em; text-decoration: none; }
 .brand i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
 .nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; text-decoration: none; }
@@ -235,6 +237,7 @@ details.agent.d4 { margin-left: 84px; }
   body.nav-open .side { transform: none; }
   body.nav-open::before { content: ""; position: fixed; z-index: 34; inset: 0; background: color-mix(in srgb, var(--fg) 35%, transparent); }
   .menu { display: inline-block; }
+  .side-close { display: inline-block; }
   header { padding: 0 12px; gap: 8px; }
   main { padding: 4px 12px 50px; }
   .status, .accent-label { display: none; }

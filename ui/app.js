@@ -106,6 +106,14 @@ function bindTip(el, title, detail) {
 }
 
 // ---------- sidebar ----------
+// Below 980 px the sidebar is a drawer: a button opens it; its own close button, a click outside, Esc or a navigation close it.
+function closeNav({ restoreFocus = false } = {}) {
+  if (!document.body.classList.contains("nav-open")) return;
+  document.body.classList.remove("nav-open");
+  $("#menu").setAttribute("aria-expanded", "false");
+  if (restoreFocus) $("#menu").focus();
+}
+
 function option(label, checked, onchange, count) {
   return h(
     "label",
@@ -208,7 +216,12 @@ function renderSide(view, ctx = {}) {
   const toggle = (set, value) => (set.has(value) ? set.delete(value) : set.add(value));
 
   const parts = [
-    h("a", { class: "brand", href: "#/" }, h("i", {}), "vigie"),
+    h(
+      "div",
+      { class: "side-top" },
+      h("a", { class: "brand", href: "#/" }, h("i", {}), "vigie"),
+      h("button", { type: "button", class: "side-close", "aria-label": "Close navigation", onclick: () => closeNav({ restoreFocus: true }) }, "✕"),
+    ),
     h(
       "nav",
       { class: "nav" },
@@ -677,8 +690,7 @@ async function renderStats() {
 const currentView = () => (location.hash === "#/stats" ? "stats" : /^#\/s\/.+/.test(location.hash) ? "detail" : "sessions");
 
 async function route({ keepSide = false } = {}) {
-  document.body.classList.remove("nav-open");
-  $("#menu").setAttribute("aria-expanded", "false");
+  closeNav();
   try {
     const view = currentView();
     const { sessions } = await api("/api/sessions");
@@ -713,6 +725,11 @@ searchEl.addEventListener("input", () => {
 $("#menu").addEventListener("click", () => {
   const open = document.body.classList.toggle("nav-open");
   $("#menu").setAttribute("aria-expanded", String(open));
+  if (open) $(".side-close")?.focus();
+});
+// The dimmed area is a pseudo-element of <body>, so a click on it lands on the body itself.
+document.addEventListener("click", (e) => {
+  if (document.body.classList.contains("nav-open") && !side.contains(e.target) && !$("#menu").contains(e.target)) closeNav();
 });
 addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? "");
@@ -720,7 +737,7 @@ addEventListener("keydown", (e) => {
     e.preventDefault();
     searchEl.focus();
   } else if (e.key === "Escape") {
-    if (document.body.classList.contains("nav-open")) route();
+    if (document.body.classList.contains("nav-open")) closeNav({ restoreFocus: true });
     else if (typing) document.activeElement.blur();
     else if (currentView() === "detail") location.hash = "#/";
   }
