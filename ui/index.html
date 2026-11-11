@@ -8,16 +8,28 @@
   <script src="/theme.js"></script>
 </head>
 <body>
-  <header>
-    <a href="#/" class="brand">Vigie</a>
-    <nav>
-      <a href="#/" id="nav-sessions">Sessions</a>
-      <a href="#/stats" id="nav-stats">Stats</a>
-    </nav>
-    <span id="status" class="muted"></span>
-    <button type="button" id="theme" class="theme"></button>
-  </header>
-  <main id="app"></main>
+  <div class="shell">
+    <aside class="side" id="side" aria-label="Navigation"></aside>
+    <div class="col">
+      <header>
+        <button type="button" id="menu" class="btn menu" aria-label="Open navigation" aria-expanded="false">☰</button>
+        <div class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Search sessions" aria-label="Search sessions" autocomplete="off">
+        </div>
+        <span id="status" class="status" aria-live="polite"></span>
+        <button type="button" id="theme" class="btn"></button>
+        <div class="accent-wrap">
+          <button type="button" id="accent" class="btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="accent-pop" title="Accent color">
+            <span class="swatch" aria-hidden="true"></span><span class="accent-label">Accent</span>
+          </button>
+          <div id="accent-pop" class="pop" role="dialog" aria-label="Accent color" hidden></div>
+        </div>
+      </header>
+      <main id="app"></main>
+    </div>
+  </div>
+  <div id="tip" role="tooltip"></div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

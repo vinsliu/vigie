@@ -8,7 +8,8 @@ Thanks for looking. Vigie is small on purpose, so a few ground rules keep it tha
 - **Never modify Claude's files.** Transcripts and anything else under `~/.claude` are read-only. Anything Vigie needs to remember goes in its own `meta.json` (`--data-dir`).
 - **Never run commands for the user.** "Resume" gives a command to copy, it does not execute it.
 - **Zero runtime dependencies, no database, no front-end build step.** Dev dependencies are fine; a dependency that ships to users needs a very good reason.
-- **The UI stays CSP-clean**: no inline scripts or styles, and transcript text is rendered with `textContent`, never as HTML.
+- **The UI stays CSP-clean**: no inline scripts or styles, and transcript text is rendered with `textContent`, never as HTML. Positions and sizes are set from JavaScript through `el.style`, never as a `style="…"` attribute. `test/ui.test.ts` fails if `innerHTML`, `eval` or an inline style comes back.
+- **Three colors**: the UI uses a background, a text and an accent color (chosen by the user); every other shade is a `color-mix()` of those. Please do not add new hues.
 - **The transcript format is undocumented.** Parse tolerantly: ignore unknown records and invalid lines rather than failing.
 
 ## Setup
@@ -35,6 +36,10 @@ The same three steps run in CI on Linux and macOS, Node 22.18 and 24.
 ## Tests and fixtures
 
 Tests use `node:test` and the anonymised fixtures in `test/fixtures/`. **Never commit a real transcript**, and never paste one in an issue: it can contain code, paths and secrets. Reproduce with `npm run demo`, or write a small fake fixture that shows the problem. Fake secrets in tests must be assembled at runtime (see `test/redact.test.ts`) so that secret scanners do not flag the repository.
+
+## The watch and other UI logic
+
+Anything that is not DOM work lives in a pure module so it can be tested: the layout of "The watch" (axis ticks, dots versus bars, stacking of overlapping sessions) is in `ui/watch.js` and covered by `test/watch.test.ts`. Dates are handled in local time, and those tests run in any time zone. Keep new logic of that kind out of `ui/app.js`.
 
 ## Secret masking
 

@@ -10,9 +10,9 @@ Read-only by design: it never modifies your Claude files and never runs anything
 
 Made-up demo data (`npm run demo`), not real sessions.
 
-![Session list](docs/sessions-light.png)
+![The watch and the session list](docs/sessions-light.png)
 
-![Session detail with sub-agents, dark theme](docs/session-dark.png)
+![A session: timeline, cost, sub-agents (dark theme)](docs/session-dark.png)
 
 ![Cost statistics](docs/stats-light.png)
 
@@ -43,8 +43,10 @@ npm install && npm start
 
 ## Features (MVP)
 
-- Session list: project, client (desktop / CLI / VS Code), title, last activity, cost, live status.
-- Session detail: timeline of messages and tool calls, token totals.
+- **The watch**: a timeline with one lane per project, showing when each session ran. A short session is a dot, a long one a bar; its size follows its cost; a running session pulses at "now". Zoom on 24 h, 7 d or 14 d. Click a mark to open the session.
+- Session list: project, client (desktop / CLI / VS Code), title, last activity, cost, live status. Filter from the sidebar by project, client, running only, archived; search from the header (press `/`).
+- Session page: timeline of messages and tool calls, token totals. It replaces the list, keeping the sidebar and header in place (`Esc` goes back).
+- Appearance: light, dark or follow the system, and an accent color of your choice (presets or any color). Stored in your browser only.
 - Sub-agents: tree of the agents a session spawned (nested ones included), each with its own timeline loaded on demand. Their tokens are shown separately and are not added to the session totals.
 - Stats: total cost, daily cost chart (last 30 days), breakdown by project and by model.
 - Management: pin a session, archive it (hide it from the list, reversible, nothing is moved or deleted; archived sessions still count in the Stats), give it a display name, copy the command that resumes it (`cd <project> && claude --resume <id>`, POSIX shells).
