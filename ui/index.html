@@ -18,10 +18,13 @@
           <input id="q" type="search" placeholder="Search sessions" aria-label="Search sessions" autocomplete="off">
         </div>
         <span id="status" class="status" aria-live="polite"></span>
-        <button type="button" id="theme" class="btn"></button>
-        <div class="accent-wrap">
-          <button type="button" id="accent" class="btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="accent-pop" title="Accent color">
-            <span class="swatch" aria-hidden="true"></span><span class="accent-label">Accent</span>
+        <div class="pop-wrap">
+          <button type="button" id="theme" class="btn icon-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="theme-pop" title="Theme"></button>
+          <div id="theme-pop" class="pop dropdown" role="menu" aria-label="Theme" hidden></div>
+        </div>
+        <div class="pop-wrap">
+          <button type="button" id="accent" class="btn icon-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="accent-pop" aria-label="Accent color" title="Accent color">
+            <span class="swatch" aria-hidden="true"></span>
           </button>
           <div id="accent-pop" class="pop" role="dialog" aria-label="Accent color" hidden></div>
         </div>

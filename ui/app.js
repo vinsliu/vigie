@@ -38,6 +38,8 @@ const ICON_LIST = "M4 6h16M4 12h16M4 18h10";
 const ICON_CHART = "M4 20V10M10 20V4M16 20v-7M22 20H2";
 
 const money = (n) => (n == null ? "–" : n === 0 ? "$0" : `$${n.toFixed(n < 1 ? 3 : 2)}`);
+// Claude writes a session's cost when the session pauses or ends, so a running session has none yet.
+const NO_COST = "Claude records a session's cost when it pauses or ends.";
 const num = (n) => new Intl.NumberFormat().format(n);
 function ago(iso) {
   const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
@@ -292,7 +294,7 @@ function markEl(m, s, rows, maxCost, trackPx) {
     {
       class: `mark ${m.kind}${s.active ? " live" : ""}${s.archived ? " arch" : ""}`,
       href: sessionHref(s),
-      "aria-label": `${title}, ${money(s.costUSD)}`,
+      "aria-label": `${title}, ${s.costUSD == null ? "cost not recorded yet" : money(s.costUSD)}`,
       style:
         m.kind === "dot"
           ? { top, left: `${m.left}%`, width: `${size}px`, height: `${size}px` }
@@ -300,7 +302,7 @@ function markEl(m, s, rows, maxCost, trackPx) {
     },
     inside ? h("span", { class: "in" }, title) : null,
   );
-  bindTip(a, title, `${money(s.costUSD)} · ${s.model ?? "?"} · ${clientName(s.entrypoint)} · ${s.active ? "running now" : ago(s.updatedAt)}`);
+  bindTip(a, title, `${s.costUSD == null ? "cost recorded when it ends" : money(s.costUSD)} · ${s.model ?? "?"} · ${clientName(s.entrypoint)} · ${s.active ? "running now" : ago(s.updatedAt)}`);
   return a;
 }
 
@@ -404,7 +406,9 @@ function listCard(shown) {
           ),
           h("td", {}, clientName(s.entrypoint)),
           h("td", {}, s.active ? "running now" : ago(s.updatedAt)),
-          h("td", { class: "n" }, h("span", { class: "cb", style: { width: `${Math.max(3, ((s.costUSD ?? 0) / max) * 60)}px` } }), money(s.costUSD)),
+          s.costUSD == null
+            ? h("td", { class: "n" }, h("span", { class: "nocost", title: NO_COST }, "–"))
+            : h("td", { class: "n" }, h("span", { class: "cb", style: { width: `${Math.max(3, (s.costUSD / max) * 60)}px` } }), money(s.costUSD)),
         );
         // The whole row is clickable; the title link keeps it reachable from the keyboard.
         tr.addEventListener("click", (e) => !e.target.closest("a") && (location.hash = sessionHref(s)));
@@ -567,7 +571,7 @@ function renderDetail(d) {
   const s = d.summary;
   applyTimelineFilter();
   updateStatus(state.sessions.filter((x) => !x.archived));
-  const cell = (label, value) => h("div", {}, h("small", {}, label), h("b", {}, value));
+  const cell = (label, value, hint) => h("div", {}, h("small", {}, label), h("b", { class: hint ? "nocost" : "", title: hint }, value));
   app.replaceChildren(
     h(
       "div",
@@ -588,7 +592,7 @@ function renderDetail(d) {
           h(
             "div",
             { class: "kv" },
-            cell("Cost", money(s.costUSD)),
+            cell("Cost", money(s.costUSD), s.costUSD == null ? NO_COST : null),
             cell("Messages", num(d.totals.messages)),
             cell("Tool calls", num(d.totals.toolCalls)),
             cell("Output tokens", num(d.totals.outputTokens)),

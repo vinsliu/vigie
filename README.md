@@ -47,7 +47,8 @@ npm install && npm start
 - A sidebar that follows the page. On the list: filters by project, client, running only and archived. On a session: show or hide kinds of timeline events (your messages, Claude, tool calls, results), jump to a sub-agent, switch to another session of the same project. On Stats: the period (7, 30 or 90 days). Pinned sessions are always there.
 - Session list: project, client (desktop / CLI / VS Code), title, last activity, cost, live status. Search from the header (press `/`).
 - Session page: timeline of messages and tool calls, token totals. It replaces the list, keeping the sidebar and header in place (`Esc` goes back).
-- Appearance: light, dark or follow the system, and an accent color of your choice (presets or any color). Stored in your browser only.
+- Appearance: two icon buttons in the header. The theme menu offers Auto (follows the system), Light and Dark; the accent button opens color presets and a free color picker. Both are stored in your browser only.
+- A running session has no cost yet: Claude writes it when the session pauses or ends. Vigie shows "–" with an explanation rather than a guess.
 - Sub-agents: tree of the agents a session spawned (nested ones included), each with its own timeline loaded on demand. Their tokens are shown separately and are not added to the session totals.
 - Stats: total cost, daily cost chart (last 30 days), breakdown by project and by model.
 - Management: pin a session, archive it (hide it from the list, reversible, nothing is moved or deleted; archived sessions still count in the Stats), give it a display name, copy the command that resumes it (`cd <project> && claude --resume <id>`, POSIX shells).
