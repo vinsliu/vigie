@@ -23,7 +23,7 @@ export interface MetaPatch {
 const MAX_ALIAS = 120;
 
 export function defaultDataDir(): string {
-  return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "agents-dashboard");
+  return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "vigie");
 }
 
 export async function readMeta(dataDir: string): Promise<MetaMap> {

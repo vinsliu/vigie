@@ -1,17 +1,30 @@
-# agents-dashboard
+# vigie
 
 A lightweight, **local-only** dashboard to browse every Claude session on your machine — whether it was started from the Claude desktop app, the CLI or the VS Code extension.
 
+Read-only by design: it never modifies your Claude files and never runs anything on your behalf.
+
+## Install
+
+Requires Node.js 22.18 or newer. Not published on npm (yet): install from GitHub.
+
 ```bash
-npx agents-dashboard
+npx github:vinsliu/vigie
 # → http://127.0.0.1:4317
+```
+
+Or from a clone:
+
+```bash
+git clone https://github.com/vinsliu/vigie && cd vigie
+npm install && npm start
 ```
 
 ## Scope
 
 - **Local only.** It reads the session files Claude already writes in `~/.claude` (or `$CLAUDE_CONFIG_DIR`). No account, no cloud, no telemetry, no outgoing request.
 - Remote sessions (Claude Code on the web, other machines, SSH hosts) are out of scope. Each machine has its own view.
-- **Never modifies Claude's files.** Pins and display names are stored in the dashboard's own file (`~/.config/agents-dashboard/meta.json`, or `--data-dir`). Renaming here does not rename the session in Claude.
+- **Never modifies Claude's files.** Pins and display names are stored in the dashboard's own file (`~/.config/vigie/meta.json`, or `--data-dir`). Renaming here does not rename the session in Claude.
 - **Never runs commands.** "Resume" only gives you a command to copy and run yourself.
 
 ## Features (MVP)

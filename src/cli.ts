@@ -13,7 +13,7 @@ const { values } = parseArgs({
 });
 
 if (values.help) {
-  console.log("Usage: agents-dashboard [--port 4317] [--claude-dir ~/.claude] [--data-dir ~/.config/agents-dashboard]");
+  console.log("Usage: vigie [--port 4317] [--claude-dir ~/.claude] [--data-dir ~/.config/vigie]");
   process.exit(0);
 }
 
@@ -34,6 +34,6 @@ server.on("error", (e: NodeJS.ErrnoException) => {
 
 // Loopback only: this tool is never exposed on the network.
 server.listen(port, "127.0.0.1", () => {
-  console.log(`agents-dashboard → http://127.0.0.1:${port}`);
+  console.log(`vigie → http://127.0.0.1:${port}`);
   console.log(`reading ${claudeDir}`);
 });

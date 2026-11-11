@@ -25,7 +25,7 @@ const ID = "11111111-1111-4111-8111-111111111111";
 let dir: string;
 
 before(async () => {
-  dir = await mkdtemp(join(tmpdir(), "agents-dashboard-"));
+  dir = await mkdtemp(join(tmpdir(), "vigie-"));
   await cp(FIXTURES, dir, { recursive: true });
   await mkdir(join(dir, "sessions"));
   await writeFile(
