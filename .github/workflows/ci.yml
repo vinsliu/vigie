@@ -2,8 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+# A new push to the same branch or PR makes the previous run pointless.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -23,3 +32,19 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # Squash merges use the PR title as the commit message, so the title is what must be conventional.
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR title follows Conventional Commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }} # passed through env: never interpolate it into the script
+        run: |
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\([a-z0-9._-]+\))?!?: .+'
+          if ! printf '%s' "$TITLE" | grep -Eq "$pattern"; then
+            echo "::error::The PR title must follow Conventional Commits, for example 'feat(ui): add a period filter'."
+            echo "Got: $TITLE"
+            exit 1
+          fi
