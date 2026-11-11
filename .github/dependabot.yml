@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Dev dependencies only (typescript, @types/node): Vigie has no runtime dependency.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+
+  # Actions used by the CI workflow.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
