@@ -114,6 +114,7 @@ function bindTip(el, title, detail) {
 function closeNav({ restoreFocus = false } = {}) {
   if (!document.body.classList.contains("nav-open")) return;
   document.body.classList.remove("nav-open");
+  $(".col").inert = false;
   $("#menu").setAttribute("aria-expanded", "false");
   if (restoreFocus) $("#menu").focus();
 }
@@ -127,6 +128,10 @@ function option(label, checked, onchange, count) {
     count == null ? null : h("span", { class: "n" }, String(count)),
   );
 }
+
+// A group of controls is a fieldset named by its legend; a group of links is a section named by its heading.
+const group = (title, ...items) => h("fieldset", {}, h("legend", {}, title), ...items.flat().filter(Boolean));
+const links = (title, ...items) => h("section", {}, h("h2", {}, title), ...items.flat().filter(Boolean));
 
 function radio(name, label, checked, onchange) {
   return h("label", { class: "opt" }, h("input", { type: "radio", name, checked, onchange }), h("span", { class: "lbl" }, label));
@@ -154,8 +159,7 @@ function detailSections(ctx) {
   const counts = {};
   for (const e of d?.events ?? []) counts[e.kind] = (counts[e.kind] ?? 0) + 1;
   const out = [
-    h("h4", {}, "Timeline"),
-    ...KINDS.map(([k, label]) =>
+    group("Timeline", KINDS.map(([k, label]) =>
       option(
         label,
         !state.hiddenKinds.has(k),
@@ -166,13 +170,15 @@ function detailSections(ctx) {
         },
         d ? `${counts[k] ?? 0}${d.truncated ? "+" : ""}` : undefined,
       ),
-    ),
+    )),
   ];
   if (d?.agents?.length) {
     out.push(
-      h("h4", {}, "Sub-agents"),
-      ...d.agents.map((a) =>
-        h("button", { type: "button", class: `jump d${Math.min(a.depth, 4)}`, title: `${a.type} · ${a.description}`, onclick: () => openAgent(a.id) }, h("b", {}, a.type), ` ${a.description}`),
+      links(
+        "Sub-agents",
+        d.agents.map((a) =>
+          h("button", { type: "button", class: `jump d${Math.min(a.depth, 4)}`, title: `${a.type} · ${a.description}`, onclick: () => openAgent(a.id) }, h("b", {}, a.type), ` ${a.description}`),
+        ),
       ),
     );
   }
@@ -186,9 +192,11 @@ function detailSections(ctx) {
       .slice(0, 8);
     if (siblings.length > 1) {
       out.push(
-        h("h4", {}, `In ${projectLabels([key]).get(key)}`),
-        ...siblings.map((x) =>
-          h("a", { class: "side-link", href: sessionHref(x), title: sessionTitle(x), "aria-current": x.id === s.id ? "page" : null }, h("span", { class: `st${x.active ? " live" : ""}` }), h("span", { class: "lbl" }, sessionTitle(x))),
+        links(
+          `In ${projectLabels([key]).get(key)}`,
+          siblings.map((x) =>
+            h("a", { class: "side-link", href: sessionHref(x), title: sessionTitle(x), "aria-current": x.id === s.id ? "page" : null }, h("span", { class: `st${x.active ? " live" : ""}` }, x.active ? h("span", { class: "sr" }, "Running: ") : null), h("span", { class: "lbl" }, sessionTitle(x))),
+          ),
         ),
       );
     }
@@ -203,12 +211,14 @@ const PERIODS = [
 ];
 function statsSections() {
   return [
-    h("h4", {}, "Period"),
-    ...PERIODS.map(([d, label]) =>
-      radio("period", label, state.statsDays === d, () => {
-        state.statsDays = d;
-        renderStats();
-      }),
+    group(
+      "Period",
+      PERIODS.map(([d, label]) =>
+        radio("period", label, state.statsDays === d, () => {
+          state.statsDays = d;
+          renderStats();
+        }),
+      ),
     ),
   ];
 }
@@ -249,22 +259,23 @@ function renderSide(view, ctx = {}) {
     const clients = [...new Set(open.map((s) => clientName(s.entrypoint)))].sort();
 
     parts.push(
-      h("h4", {}, "Projects"),
-      ...listed.map((p) =>
-        option(labels.get(p.k), f.projects.has(p.k), () => (toggle(f.projects, p.k), drawSessions()), p.n),
+      group(
+        "Projects",
+        listed.map((p) => option(labels.get(p.k), f.projects.has(p.k), () => (toggle(f.projects, p.k), drawSessions()), p.n)),
+        projects.length > listed.length || (state.moreProjects && projects.length > 6)
+          ? h(
+              "button",
+              { type: "button", class: "more", onclick: () => ((state.moreProjects = !state.moreProjects), renderSide(view)) },
+              state.moreProjects ? "Show fewer" : `Show all ${projects.length}`,
+            )
+          : null,
       ),
-      projects.length > listed.length || (state.moreProjects && projects.length > 6)
-        ? h(
-            "button",
-            { type: "button", class: "more", onclick: () => ((state.moreProjects = !state.moreProjects), renderSide(view)) },
-            state.moreProjects ? "Show fewer" : `Show all ${projects.length}`,
-          )
-        : null,
-      h("h4", {}, "Clients"),
-      ...clients.map((c) => option(c, f.clients.has(c), () => (toggle(f.clients, c), drawSessions()))),
-      h("h4", {}, "Show"),
-      option("Running only", f.activeOnly, (e) => ((f.activeOnly = e.target.checked), drawSessions())),
-      option("Archived", f.showArchived, (e) => ((f.showArchived = e.target.checked), drawSessions()), sessions.length - open.length),
+      group("Clients", clients.map((c) => option(c, f.clients.has(c), () => (toggle(f.clients, c), drawSessions())))),
+      group(
+        "Show",
+        option("Running only", f.activeOnly, (e) => ((f.activeOnly = e.target.checked), drawSessions())),
+        option("Archived", f.showArchived, (e) => ((f.showArchived = e.target.checked), drawSessions()), sessions.length - open.length),
+      ),
     );
   } else if (view === "detail") {
     parts.push(...detailSections(ctx));
@@ -275,8 +286,10 @@ function renderSide(view, ctx = {}) {
   const pinned = open.filter((s) => s.pinned);
   if (pinned.length) {
     parts.push(
-      h("h4", {}, "Pinned"),
-      ...pinned.map((s) => h("a", { class: "side-link", href: sessionHref(s), title: sessionTitle(s) }, h("span", { class: "lbl" }, sessionTitle(s)))),
+      links(
+        "Pinned",
+        pinned.map((s) => h("a", { class: "side-link", href: sessionHref(s), title: sessionTitle(s) }, h("span", { class: "lbl" }, sessionTitle(s)))),
+      ),
     );
   }
   parts.push(h("div", { class: "foot" }, "Local only · 127.0.0.1", h("br"), "Never writes to Claude's files."));
@@ -344,7 +357,7 @@ function watchCard(shown) {
   const head = h(
     "div",
     { class: "ch" },
-    h("h3", {}, "The watch"),
+    h("h2", {}, "The watch"),
     h("span", { class: "sub" }, "each mark is a session · longer = ran longer · bigger = costs more"),
     h("span", { class: "sp" }),
     h(
@@ -400,7 +413,7 @@ function listCard(shown) {
           h(
             "td",
             {},
-            h("span", { class: `st${s.active ? " live" : s.pinned ? " pin" : ""}`, title: s.active ? "Running" : s.pinned ? "Pinned" : "" }),
+            h("span", { class: `st${s.active ? " live" : s.pinned ? " pin" : ""}`, title: s.active ? "Running" : s.pinned ? "Pinned" : "" }, s.active || s.pinned ? h("span", { class: "sr" }, s.active ? "Running" : "Pinned") : null),
             h("a", { class: "t", href: sessionHref(s) }, sessionTitle(s)),
             s.archived ? h("span", { class: "badge" }, "archived") : null,
             s.agents ? h("span", { class: "badge" }, `${s.agents} ${s.agents === 1 ? "agent" : "agents"}`) : null,
@@ -420,7 +433,7 @@ function listCard(shown) {
   return h(
     "section",
     { class: "card" },
-    h("div", { class: "ch" }, h("h3", {}, "Sessions"), h("span", { class: "sub" }, `${shown.length} shown`)),
+    h("div", { class: "ch" }, h("h2", {}, "Sessions"), h("span", { class: "sub" }, `${shown.length} shown`)),
     h(
       "div",
       { class: "table-wrap" },
@@ -493,7 +506,7 @@ function actionsCard(s) {
 
 function resumeCard(d) {
   if (!d.resumeCommand) return null;
-  const code = h("code", {}, d.resumeCommand);
+  const code = h("code", { tabIndex: 0, role: "textbox", "aria-readonly": "true", "aria-label": "Resume command" }, d.resumeCommand);
   const copyBtn = h("button", { type: "button", class: "primary" }, "Copy command");
   copyBtn.addEventListener("click", async () => {
     try {
@@ -617,13 +630,19 @@ function renderDetail(d) {
 }
 
 // ---------- stats page ----------
+function chartSummary(days) {
+  const total = days.reduce((n, d) => n + d.costUSD, 0);
+  const peak = days.reduce((a, d) => (d.costUSD > a.costUSD ? d : a), days[0] ?? { costUSD: 0, date: "" });
+  return `Estimated daily cost over ${days.length} days: ${money(total)} in total${peak.costUSD > 0 ? `, highest on ${peak.date} at ${money(peak.costUSD)}` : ""}`;
+}
+
 function costChart(days) {
   const W = 760, H = 190, padL = 40, padB = 22, padT = 8;
   const max = Math.max(0.01, ...days.map((d) => d.costUSD));
   const slot = (W - padL) / days.length;
   const barW = Math.max(2, slot - 4);
   const y = (v) => padT + (H - padT - padB) * (1 - v / max);
-  const chart = svg("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Estimated daily cost" });
+  const chart = svg("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": chartSummary(days) });
   for (const f of [0, 0.5, 1]) {
     const gy = y(max * f);
     chart.append(svg("line", { class: "grid", x1: padL, x2: W, y1: gy, y2: gy }));
@@ -679,15 +698,15 @@ async function renderStats() {
     h(
       "section",
       { class: "card" },
-      h("div", { class: "ch" }, h("h3", {}, "Daily cost"), h("span", { class: "sub" }, `last ${days} days`)),
+      h("div", { class: "ch" }, h("h2", {}, "Daily cost"), h("span", { class: "sub" }, `last ${days} days`)),
       costChart(s.days),
       h("p", { class: "hint" }, "Session and model totals come from Claude's own cost data. A day's cost is an estimate: a session's cost is spread over the days it ran, in proportion to the tokens used."),
     ),
     h(
       "div",
       { class: "two" },
-      h("section", { class: "card" }, h("div", { class: "ch" }, h("h3", {}, "By project")), table(["Project", "Sessions", "Cost", "Output tokens"], s.projects.map((p) => [p.project, p.sessions, money(p.costUSD), num(p.tokens.output)]))),
-      h("section", { class: "card" }, h("div", { class: "ch" }, h("h3", {}, "By model")), table(["Model", "Cost", "Input", "Output", "Cache read"], s.models.map((m) => [m.model, money(m.costUSD), num(m.tokens.input), num(m.tokens.output), num(m.tokens.cacheRead)]))),
+      h("section", { class: "card" }, h("div", { class: "ch" }, h("h2", {}, "By project")), table(["Project", "Sessions", "Cost", "Output tokens"], s.projects.map((p) => [p.project, p.sessions, money(p.costUSD), num(p.tokens.output)]))),
+      h("section", { class: "card" }, h("div", { class: "ch" }, h("h2", {}, "By model")), table(["Model", "Cost", "Input", "Output", "Cache read"], s.models.map((m) => [m.model, money(m.costUSD), num(m.tokens.input), num(m.tokens.output), num(m.tokens.cacheRead)]))),
     ),
   );
 }
@@ -730,6 +749,7 @@ searchEl.addEventListener("input", () => {
 
 $("#menu").addEventListener("click", () => {
   const open = document.body.classList.toggle("nav-open");
+  $(".col").inert = open; // the page behind the drawer is out of reach of the keyboard and screen readers
   $("#menu").setAttribute("aria-expanded", String(open));
   if (open) $(".side-close")?.focus();
 });

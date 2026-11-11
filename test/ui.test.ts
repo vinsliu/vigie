@@ -60,3 +60,15 @@ describe("UI stays CSP-clean and renders text safely", () => {
     for (const f of files) assert.deepEqual(violations(await read(f)), [], `${f} breaks the CSP / text-only rules`);
   });
 });
+
+describe("UI accessibility guards", () => {
+  it("names groups with a legend or a heading, never a bare h3/h4", async () => {
+    const js = await read("app.js");
+    assert.ok(!/h\("h[34]"/.test(js), "use h2 for card titles and fieldset/legend or section/h2 in the sidebar");
+    assert.match(js, /h\("legend"/);
+  });
+  it("keeps the tooltip out of the accessibility tree and drawer content inert", async () => {
+    assert.match(await read("index.html"), /id="tip"[^>]*aria-hidden="true"/);
+    assert.match(await read("app.js"), /\.inert = open/);
+  });
+});

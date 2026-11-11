@@ -16,3 +16,4 @@ Notable changes to Vigie. The format follows [Keep a Changelog](https://keepacha
 - `npm run demo`: made-up sessions to try or photograph Vigie without exposing real ones.
 - Live refresh through Server-Sent Events.
 - Development workflow: `main` and `dev` branches, Conventional Commits, pull request and issue templates, CI on Linux and macOS (Node 22.18 and 24), tagged releases.
+- Accessibility: muted text and the accent used as text or focus ring now reach a 4.5:1 contrast (the accent is adjusted per theme); sidebar groups are named fieldsets and headings; marks on the watch have a 24 px hit area; running and pinned states are announced, not only colored; the chart has a text summary; the resume command is focusable; the page behind the mobile drawer is inert.

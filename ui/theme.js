@@ -36,7 +36,24 @@
 
   const root = document.documentElement;
   const applyMode = () => (mode === "auto" ? root.removeAttribute("data-theme") : root.setAttribute("data-theme", mode));
-  const applyAccent = () => root.style.setProperty("--accent", accent);
+  // The accent as text or focus ring must reach 4.5:1 on the card: move it toward the text color until it does.
+  const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const lin = (v) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  const ink = (hex, card, toward) => {
+    const from = rgb(hex);
+    for (let t = 0; t <= 1.0001; t += 0.05) {
+      const c = from.map((v, i) => Math.round(v + (toward[i] - v) * t));
+      if (ratio(c, card) >= 4.5) return `rgb(${c.join(" ")})`;
+    }
+    return `rgb(${toward.join(" ")})`;
+  };
+  const applyAccent = () => {
+    root.style.setProperty("--accent", accent);
+    root.style.setProperty("--accent-ink-l", ink(accent, [251, 251, 250], [22, 22, 22]));
+    root.style.setProperty("--accent-ink-d", ink(accent, [21, 21, 21], [236, 236, 236]));
+  };
   applyMode();
   applyAccent();
 
