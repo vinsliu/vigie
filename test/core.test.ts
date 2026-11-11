@@ -78,8 +78,9 @@ describe("management metadata", () => {
     assert.deepEqual(parsePatch({ alias: "  Hello\nworld  " }), { alias: "Hello world" });
     assert.deepEqual(parsePatch({ alias: "   " }), { alias: null });
     assert.deepEqual(parsePatch({ alias: null }), { alias: null });
+    assert.deepEqual(parsePatch({ archived: true, pinned: false }), { archived: true, pinned: false });
     assert.equal((parsePatch({ alias: "x".repeat(500) })?.alias ?? "").length, 120);
-    for (const bad of [null, [], "x", {}, { pinned: "yes" }, { alias: 3 }, { pinned: true, extra: 1 }, { __proto__: 1, x: 1 }]) {
+    for (const bad of [null, [], "x", {}, { pinned: "yes" }, { archived: "true" }, { archived: 1 }, { alias: 3 }, { pinned: true, extra: 1 }, { __proto__: 1, x: 1 }]) {
       assert.equal(parsePatch(bad), null, JSON.stringify(bad));
     }
   });
@@ -99,7 +100,13 @@ describe("management metadata", () => {
     const other = { ...s, id: "22222222-2222-4222-8222-222222222222", pinned: false };
     assert.deepEqual(pinnedFirst([other, pinned]).map((x) => x.id), [ID, other.id]);
 
-    await updateMeta(data, ID, { pinned: false, alias: null });
+    await updateMeta(data, ID, { archived: true });
+    const archived = withMeta(s, await readMeta(data));
+    assert.equal(archived.archived, true);
+    assert.equal(archived.pinned, true, "archiving does not touch other settings");
+    assert.equal(withMeta(s, {}).archived, false);
+
+    await updateMeta(data, ID, { pinned: false, alias: null, archived: false });
     assert.deepEqual(await readMeta(data), {}, "empty entries are removed");
   });
 });
@@ -250,7 +257,14 @@ describe("server", () => {
     try {
       const ok = await request(port, "PATCH", url, { ...json, Origin: `http://${host}` }, JSON.stringify({ pinned: true, alias: "My name" }));
       assert.equal(ok.status, 200);
-      assert.deepEqual(ok.json, { pinned: true, alias: "My name" });
+      assert.deepEqual(ok.json, { pinned: true, alias: "My name", archived: false });
+
+      const arch = await request(port, "PATCH", url, json, JSON.stringify({ archived: true, pinned: false }));
+      assert.deepEqual(arch.json, { pinned: false, alias: "My name", archived: true });
+      const listed = await request(port, "GET", "/api/sessions");
+      assert.equal(listed.json.sessions.length, 1, "archived sessions are still returned: filtering is the UI's job");
+      assert.equal(listed.json.sessions[0].archived, true);
+      assert.equal((await request(port, "PATCH", url, json, JSON.stringify({ archived: false, pinned: true }))).status, 200);
 
       const list = await request(port, "GET", "/api/sessions");
       assert.equal(list.json.sessions[0].alias, "My name");

@@ -24,6 +24,7 @@ export interface SessionSummary {
   /** From our own metadata file, never from Claude's transcripts. */
   pinned: boolean;
   alias: string | null;
+  archived: boolean;
 }
 
 export type TimelineKind = "user" | "assistant" | "tool_use" | "tool_result";

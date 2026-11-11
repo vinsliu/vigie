@@ -147,7 +147,7 @@ export function createDashboard({ claudeDir, dataDir }: Options): Server {
     if (!(await findTranscript(claudeDir, id))) return json(res, 404, { error: "not found" });
     const meta = await updateMeta(dataDir, id, patch);
     broadcast();
-    return json(res, 200, { pinned: meta.pinned === true, alias: meta.alias ?? null });
+    return json(res, 200, { pinned: meta.pinned === true, alias: meta.alias ?? null, archived: meta.archived === true });
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {

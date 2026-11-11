@@ -10,11 +10,14 @@ import type { SessionSummary } from "./types.ts";
 export interface SessionMeta {
   pinned?: true;
   alias?: string;
+  /** Hidden from the default list. Purely a dashboard setting: the transcript stays where it is. */
+  archived?: true;
 }
 export type MetaMap = Record<string, SessionMeta>;
 export interface MetaPatch {
   pinned?: boolean;
   alias?: string | null;
+  archived?: boolean;
 }
 
 const MAX_ALIAS = 120;
@@ -48,6 +51,10 @@ export function updateMeta(dataDir: string, id: string, patch: MetaPatch): Promi
       if (patch.alias) cur.alias = patch.alias;
       else delete cur.alias;
     }
+    if (patch.archived !== undefined) {
+      if (patch.archived) cur.archived = true;
+      else delete cur.archived;
+    }
     if (Object.keys(cur).length) all[id] = cur;
     else delete all[id];
     await mkdir(dataDir, { recursive: true });
@@ -67,11 +74,15 @@ export function parsePatch(body: unknown): MetaPatch | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   const b = body as Record<string, unknown>;
   const keys = Object.keys(b);
-  if (keys.length === 0 || keys.some((k) => k !== "pinned" && k !== "alias")) return null;
+  if (keys.length === 0 || keys.some((k) => k !== "pinned" && k !== "alias" && k !== "archived")) return null;
   const patch: MetaPatch = {};
   if ("pinned" in b) {
     if (typeof b.pinned !== "boolean") return null;
     patch.pinned = b.pinned;
+  }
+  if ("archived" in b) {
+    if (typeof b.archived !== "boolean") return null;
+    patch.archived = b.archived;
   }
   if ("alias" in b) {
     if (b.alias === null) patch.alias = null;
@@ -85,7 +96,7 @@ export function parsePatch(body: unknown): MetaPatch | null {
 
 export function withMeta<T extends SessionSummary>(s: T, meta: MetaMap): T {
   const m = meta[s.id];
-  return { ...s, pinned: m?.pinned === true, alias: m?.alias ?? null };
+  return { ...s, pinned: m?.pinned === true, alias: m?.alias ?? null, archived: m?.archived === true };
 }
 
 /** Pinned sessions first; otherwise keep the incoming (most recent first) order. */

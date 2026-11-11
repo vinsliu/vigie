@@ -35,7 +35,7 @@ async function api(path) {
 }
 
 // ---------- list view ----------
-const filters = { q: "", client: "", activeOnly: false };
+const filters = { q: "", client: "", activeOnly: false, showArchived: false };
 
 async function renderList() {
   const { sessions } = await api("/api/sessions");
@@ -48,16 +48,20 @@ async function renderList() {
       (s) =>
         (!filters.client || clientName(s.entrypoint) === filters.client) &&
         (!filters.activeOnly || s.active) &&
+        (filters.showArchived || !s.archived) &&
         (!q || `${sessionTitle(s)} ${s.cwd ?? ""} ${s.lastPrompt ?? ""}`.toLowerCase().includes(q)),
     );
     const total = shown.reduce((n, s) => n + (s.costUSD ?? 0), 0);
-    statusEl.textContent = `${shown.length} ${shown.length === 1 ? "session" : "sessions"} · ${sessions.filter((s) => s.active).length} active · ${money(total)}`;
+    const hidden = filters.showArchived ? 0 : sessions.filter((s) => s.archived).length;
+    statusEl.textContent =
+      `${shown.length} ${shown.length === 1 ? "session" : "sessions"} · ${sessions.filter((s) => s.active).length} active · ${money(total)}` +
+      (hidden ? ` · ${hidden} archived hidden` : "");
     listEl.replaceChildren(
       ...(shown.length
         ? shown.map((s) =>
             h(
               "li",
-              {},
+              { class: s.archived ? "archived" : "" },
               h(
                 "a",
                 { href: `#/s/${encodeURIComponent(s.id)}` },
@@ -73,6 +77,7 @@ async function renderList() {
                   "div",
                   { class: "meta" },
                   h("span", { class: "badge" }, clientName(s.entrypoint)),
+                  s.archived ? h("span", { class: "badge" }, "archived") : null,
                   s.agents ? h("span", { class: "badge" }, `${s.agents} ${s.agents === 1 ? "agent" : "agents"}`) : null,
                   projectName(s),
                 ),
@@ -98,7 +103,12 @@ async function renderList() {
   );
   const active = h("input", { type: "checkbox", checked: filters.activeOnly, onchange: (e) => ((filters.activeOnly = e.target.checked), draw()) });
 
-  app.replaceChildren(h("div", { class: "toolbar" }, search, select, h("label", {}, active, " Active only")), listEl);
+  const archived = h("input", { type: "checkbox", checked: filters.showArchived, onchange: (e) => ((filters.showArchived = e.target.checked), draw()) });
+
+  app.replaceChildren(
+    h("div", { class: "toolbar" }, search, select, h("label", {}, active, " Active only"), h("label", {}, archived, " Show archived")),
+    listEl,
+  );
   draw();
 }
 
@@ -150,6 +160,12 @@ function actionsBar(s, d) {
       "div",
       { class: "toolbar" },
       h("button", { type: "button", onclick: () => run({ pinned: !s.pinned }) }, s.pinned ? "★ Unpin" : "☆ Pin"),
+      // Archiving only hides the session in this dashboard; nothing is moved or deleted.
+      h(
+        "button",
+        { type: "button", title: "Hide from the list. Nothing is deleted.", onclick: () => run(s.archived ? { archived: false } : { archived: true, pinned: false }) },
+        s.archived ? "Unarchive" : "Archive",
+      ),
       name,
       h("button", { type: "button", onclick: () => run({ alias: name.value }) }, "Save name"),
       msg,

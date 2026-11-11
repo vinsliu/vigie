@@ -20,7 +20,7 @@ npx agents-dashboard
 - Session detail: timeline of messages and tool calls, token totals.
 - Sub-agents: tree of the agents a session spawned (nested ones included), each with its own timeline loaded on demand. Their tokens are shown separately and are not added to the session totals.
 - Stats: total cost, daily cost chart (last 30 days), breakdown by project and by model.
-- Management: pin a session, give it a display name, copy the command that resumes it (`cd <project> && claude --resume <id>`, POSIX shells).
+- Management: pin a session, archive it (hide it from the list, reversible, nothing is moved or deleted; archived sessions still count in the Stats), give it a display name, copy the command that resumes it (`cd <project> && claude --resume <id>`, POSIX shells).
 - Live refresh through Server-Sent Events.
 
 > Costs per session, project and model come straight from Claude's own cost data. The cost of a given *day* is an estimate: a session's cost is spread over the days it ran, in proportion to the tokens used.

@@ -84,6 +84,7 @@ button { cursor: pointer; }
 .actions input[type="text"] { flex: 1 1 260px; }
 .resume code { flex: 1 1 320px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); overflow-x: auto; white-space: nowrap; user-select: all; }
 .pin { color: var(--accent); }
+.sessions li.archived { opacity: .55; }
 details.agent { border: 1px solid var(--line); border-radius: 8px; background: var(--card); margin-bottom: 6px; }
 details.agent > summary { cursor: pointer; padding: 8px 12px; overflow: hidden; text-overflow: ellipsis; }
 details.agent > .agent-body { padding: 0 12px 12px; }
