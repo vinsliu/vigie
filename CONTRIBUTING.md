@@ -41,7 +41,7 @@ chore/ci-cache ─────┘
 3. Before pushing, run `npm run check` (typecheck, tests, build). CI runs the same on Linux and macOS, Node 22.18 and 24.
 4. Open a pull request **against `dev`**. Its title must be conventional too: it becomes the commit message when squashed. Fill in the checklist.
 5. User-facing change? Add a line under `[Unreleased]` in `CHANGELOG.md`, and refresh the README and screenshots if the interface changed.
-6. Once CI is green, the PR is squash-merged into `dev` and its branch is deleted.
+6. Once CI is green, the PR is squash-merged into `dev` and its branch is deleted (`gh pr merge --squash --delete-branch`, or the button on the PR page). Never delete `main` or `dev`.
 
 Never push straight to `main` or `dev`. Releases and urgent fixes are described in [RELEASING.md](RELEASING.md).
 
