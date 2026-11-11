@@ -10,6 +10,7 @@
   --soft: color-mix(in srgb, var(--fg) 6%, transparent);
   --muted: color-mix(in srgb, var(--fg) 58%, var(--bg));
   --accent-ink: color-mix(in srgb, var(--accent) 78%, var(--fg)); /* accent used as text: darker / lighter for contrast */
+  --gap: 12px; /* inset of the floating sidebar and header */
   --shadow: 0 10px 34px -14px color-mix(in srgb, var(--fg) 38%, transparent);
   --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -83,7 +84,15 @@ input[type="text"]:focus, input[type="search"]:focus { background: var(--card); 
 .foot { margin-top: auto; padding: 12px 10px 2px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
 
 .col { min-width: 0; }
-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 24px 0 20px; background: color-mix(in srgb, var(--page) 86%, transparent); backdrop-filter: blur(10px); }
+/* The header floats like the sidebar: a card inset by --gap, with its border and shadow.
+   The strip above it (the sticky ::before) hides the content that scrolls through the gap. */
+.col::before { content: ""; position: sticky; top: 0; z-index: 19; display: block; height: var(--gap); margin-bottom: calc(-1 * var(--gap)); background: var(--page); }
+header {
+  position: sticky; top: var(--gap); z-index: 20; display: flex; align-items: center; gap: 12px;
+  height: 56px; max-width: 1320px; margin: var(--gap) var(--gap) 0; padding: 0 10px 0 12px;
+  background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(12px);
+  border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+}
 .search { position: relative; flex: 1; max-width: 520px; }
 .search input { width: 100%; padding-left: 34px; }
 .search svg { position: absolute; left: 11px; top: 9px; width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 2; pointer-events: none; }
@@ -110,7 +119,7 @@ header { position: sticky; top: 0; z-index: 20; display: flex; align-items: cent
 .custom { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--muted); }
 .custom input { width: 44px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
 
-main { padding: 4px 24px 60px 20px; max-width: 1320px; }
+main { padding: 16px var(--gap) 60px; max-width: 1320px; }
 h1 { margin: 0; font-size: 22px; line-height: 1.25; letter-spacing: -.01em; }
 
 /* ---------- cards ---------- */
@@ -187,7 +196,7 @@ td .p { margin-left: 17px; font: 12px var(--mono); color: var(--muted); }
 .dhead .meta { margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
 .dgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .stack > .card + .card { margin-top: 16px; }
-@media (min-width: 1180px) { .dgrid { grid-template-columns: minmax(0, 1fr) 350px; } .dgrid > .stack { order: 2; position: sticky; top: 68px; max-height: calc(100vh - 84px); overflow: auto; } .dgrid > .card { order: 1; } }
+@media (min-width: 1180px) { .dgrid { grid-template-columns: minmax(0, 1fr) 350px; } .dgrid > .stack { order: 2; position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow: auto; } .dgrid > .card { order: 1; } }
 .kv { display: grid; grid-template-columns: repeat(3, 1fr); margin: 14px 18px 18px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .kv div { padding: 9px 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .kv div:nth-child(3n) { border-right: 0; }
@@ -247,8 +256,9 @@ details.agent.d4 { margin-left: 84px; }
   body.nav-open::before { content: ""; position: fixed; z-index: 34; inset: 0; background: color-mix(in srgb, var(--fg) 35%, transparent); }
   .menu { display: inline-block; }
   .side-close { display: inline-block; }
-  header { padding: 0 12px; gap: 8px; }
-  main { padding: 4px 12px 50px; }
+  :root { --gap: 8px; }
+  header { padding: 0 8px; gap: 8px; }
+  main { padding: 12px var(--gap) 50px; }
   .status { display: none; }
   .lane { grid-template-columns: 78px minmax(0, 1fr); }
   .axis { margin-left: 78px; }
