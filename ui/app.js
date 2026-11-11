@@ -221,7 +221,7 @@ function renderSide(view, ctx = {}) {
     h(
       "div",
       { class: "side-top" },
-      h("a", { class: "brand", href: "#/" }, h("i", {}), "vigie"),
+      h("a", { class: "brand", href: "#/" }, h("i", {}), "Vigie"),
       h("button", { type: "button", class: "side-close", "aria-label": "Close navigation", onclick: () => closeNav({ restoreFocus: true }) }, "✕"),
     ),
     h(
