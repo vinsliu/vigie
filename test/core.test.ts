@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { computeStats, getSession, listSessions } from "../src/core/index.ts";
+import { computeStats, getAgent, getSession, listSessions } from "../src/core/index.ts";
 import { localDay } from "../src/core/stats.ts";
 import { createDashboard, isLocalHost } from "../src/server/index.ts";
 
@@ -46,15 +46,45 @@ describe("core", () => {
     assert.ok(d);
     assert.deepEqual(
       d.events.map((e) => e.kind),
-      ["user", "assistant", "tool_use", "tool_result"],
+      ["user", "assistant", "tool_use", "tool_result", "tool_use"],
     );
     assert.equal(d.events[0]?.text, "Add a login page");
     assert.equal(d.events[2]?.tool, "Write");
-    assert.equal(d.totals.toolCalls, 1);
+    assert.equal(d.totals.toolCalls, 2);
     // msg_1 is written twice (one record per content block): count it once.
-    assert.equal(d.totals.messages, 2);
+    assert.equal(d.totals.messages, 3);
     assert.equal(d.totals.outputTokens, 20);
     assert.equal(d.totals.cacheReadTokens, 100);
+  });
+
+  it("builds the sub-agent tree and keeps sub-agent tokens out of the session totals", async () => {
+    const [summary] = await listSessions(dir);
+    assert.equal(summary?.agents, 2);
+
+    const d = await getSession(dir, ID);
+    assert.ok(d);
+    assert.deepEqual(
+      d.agents.map((a) => [a.id, a.parentAgentId, a.depth, a.type]),
+      [
+        ["aaaa1111", null, 1, "Explore"],
+        ["bbbb2222", "aaaa1111", 2, "general-purpose"],
+      ],
+    );
+    const [first, nested] = d.agents;
+    assert.equal(first?.description, "Explore the repo");
+    assert.equal(first?.model, "claude-haiku-test", "actual model wins over the meta alias");
+    assert.equal(first?.finished, true);
+    assert.equal(first?.totals.outputTokens, 10, "msg_a1 is written twice but counted once");
+    assert.equal(nested?.finished, false);
+    assert.equal(d.totals.outputTokens, 20, "session totals exclude sub-agents");
+
+    const a = await getAgent(dir, ID, "aaaa1111");
+    assert.deepEqual(
+      a?.events.map((e) => e.kind),
+      ["user", "assistant", "tool_use"],
+    );
+    assert.equal(await getAgent(dir, ID, "../../x"), null);
+    assert.equal(await getAgent(dir, ID, "cccc3333"), null);
   });
 
   it("computes stats with deduplicated tokens and exact per-model cost", async () => {
@@ -103,6 +133,10 @@ describe("server", () => {
 
       assert.equal((await fetch(`${base}/api/sessions/${ID}`)).status, 200);
       assert.equal((await fetch(`${base}/api/sessions/nope`)).status, 404);
+      assert.equal((await fetch(`${base}/api/sessions/${ID}/agents/aaaa1111`)).status, 200);
+      assert.equal((await fetch(`${base}/api/sessions/${ID}/agents/nope-nope`)).status, 404);
+      assert.equal((await fetch(`${base}/api/sessions/${ID}/agents`)).status, 404);
+      assert.equal((await fetch(`${base}/api/sessions/%E0%A4%A`)).status, 400);
       const stats = await fetch(`${base}/api/stats?days=7`);
       assert.equal(stats.status, 200);
       assert.equal(((await stats.json()) as { days: unknown[] }).days.length, 7);

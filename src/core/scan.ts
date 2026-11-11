@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { open, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import { countAgents } from "./agents.ts";
 import { liveSessions } from "./live.ts";
 import { clip, parseLine, textOf } from "./text.ts";
 import type { Rec, SessionSummary } from "./types.ts";
@@ -46,7 +47,10 @@ async function costByStreaming(path: string): Promise<number | null> {
 }
 
 /** Summarise one transcript by reading only its head and tail. */
-export async function summarize(path: string, projectDir: string): Promise<Omit<SessionSummary, "active" | "pid">> {
+export async function summarize(
+  path: string,
+  projectDir: string,
+): Promise<Omit<SessionSummary, "active" | "pid" | "agents">> {
   const st = await stat(path);
   const id = path.slice(path.lastIndexOf("/") + 1).replace(/\.jsonl$/, "");
   const size = st.size;
@@ -162,6 +166,7 @@ export async function listSessions(claudeDir: string): Promise<SessionSummary[]>
         entrypoint: s.entrypoint ?? l?.entrypoint ?? null,
         active: Boolean(l),
         pid: l?.pid ?? null,
+        agents: await countAgents(join(claudeDir, "projects", s.projectDir, `${s.id}.jsonl`)),
       });
     }
   }
@@ -174,7 +179,13 @@ export async function summaryOf(
 ): Promise<SessionSummary> {
   const [s, live] = await Promise.all([cachedSummarize(file.path, file.projectDir), liveSessions(claudeDir)]);
   const l = live.get(s.id);
-  return { ...s, entrypoint: s.entrypoint ?? l?.entrypoint ?? null, active: Boolean(l), pid: l?.pid ?? null };
+  return {
+    ...s,
+    entrypoint: s.entrypoint ?? l?.entrypoint ?? null,
+    active: Boolean(l),
+    pid: l?.pid ?? null,
+    agents: await countAgents(file.path),
+  };
 }
 
 export async function findTranscript(

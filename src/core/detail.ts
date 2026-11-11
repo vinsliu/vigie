@@ -1,10 +1,23 @@
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { clip, parseLine, textOf } from "./text.ts";
-import type { SessionDetail, TimelineEvent } from "./types.ts";
+import type { DetailTotals, TimelineEvent } from "./types.ts";
 
 const MAX_EVENTS = 2000;
 const MAX_TEXT = 1500;
+
+/** Tool names under which Claude spawns a sub-agent (`Task` in older versions). */
+const SPAWN_TOOLS = new Set(["Agent", "Task"]);
+
+export interface DetailBody {
+  events: TimelineEvent[];
+  truncated: boolean;
+  totals: DetailTotals;
+  /** Ids of the tool calls in this transcript that spawned a sub-agent. */
+  spawned: string[];
+  startedAt: string | null;
+  model: string | null;
+}
 
 function toolResultText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -19,9 +32,11 @@ function describeInput(input: unknown): string {
 }
 
 /** Stream a full transcript into a bounded timeline plus token totals. */
-export async function readDetail(path: string): Promise<Omit<SessionDetail, "summary">> {
+export async function readDetail(path: string, opts: { events?: boolean } = {}): Promise<DetailBody> {
+  const wantEvents = opts.events !== false;
   const events: TimelineEvent[] = [];
-  const totals = {
+  const spawned: string[] = [];
+  const totals: DetailTotals = {
     messages: 0,
     toolCalls: 0,
     inputTokens: 0,
@@ -31,7 +46,10 @@ export async function readDetail(path: string): Promise<Omit<SessionDetail, "sum
   };
   const seen = new Set<string>();
   let truncated = false;
+  let startedAt: string | null = null;
+  let model: string | null = null;
   const push = (e: TimelineEvent) => {
+    if (!wantEvents) return;
     if (events.length >= MAX_EVENTS) truncated = true;
     else events.push(e);
   };
@@ -41,9 +59,11 @@ export async function readDetail(path: string): Promise<Omit<SessionDetail, "sum
     const r = parseLine(line);
     if (!r || (r.type !== "user" && r.type !== "assistant") || r.isMeta) continue;
     const ts = typeof r.timestamp === "string" ? r.timestamp : null;
+    startedAt ??= ts;
     const content = r.message?.content;
 
     if (r.type === "assistant") {
+      if (typeof r.message?.model === "string") model = r.message.model;
       // One API message is written once per content block with the same id and usage:
       // count messages and tokens once per id.
       const mid = r.message?.id;
@@ -65,6 +85,7 @@ export async function readDetail(path: string): Promise<Omit<SessionDetail, "sum
         for (const b of content) {
           if (b?.type !== "tool_use") continue;
           totals.toolCalls++;
+          if (SPAWN_TOOLS.has(b.name) && typeof b.id === "string") spawned.push(b.id);
           push({ kind: "tool_use", ts, tool: String(b.name ?? "?"), text: clip(describeInput(b.input), 400) });
         }
       }
@@ -84,5 +105,5 @@ export async function readDetail(path: string): Promise<Omit<SessionDetail, "sum
       push({ kind: "user", ts, text: clip(text, MAX_TEXT) });
     }
   }
-  return { events, truncated, totals };
+  return { events, truncated, totals, spawned, startedAt, model };
 }

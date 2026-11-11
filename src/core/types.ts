@@ -19,6 +19,8 @@ export interface SessionSummary {
   sizeBytes: number;
   active: boolean;
   pid: number | null;
+  /** Number of sub-agents spawned by this session (all depths). */
+  agents: number;
 }
 
 export type TimelineKind = "user" | "assistant" | "tool_use" | "tool_result";
@@ -30,16 +32,42 @@ export interface TimelineEvent {
   tool?: string;
 }
 
+export interface DetailTotals {
+  messages: number;
+  toolCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+}
+
+export interface AgentNode {
+  id: string;
+  /** `Explore`, `general-purpose`, … as recorded by Claude. */
+  type: string;
+  description: string;
+  model: string | null;
+  finished: boolean;
+  /** 1 for agents spawned by the session itself, 2 for agents spawned by those, … */
+  depth: number;
+  /** Id of the `Agent` tool call (in the parent transcript) that spawned it. */
+  toolUseId: string | null;
+  parentAgentId: string | null;
+  startedAt: string | null;
+  totals: DetailTotals;
+}
+
 export interface SessionDetail {
   summary: SessionSummary;
   events: TimelineEvent[];
   truncated: boolean;
-  totals: {
-    messages: number;
-    toolCalls: number;
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheCreationTokens: number;
-  };
+  totals: DetailTotals;
+  /** Sub-agents in tree order (parent before its children). */
+  agents: AgentNode[];
+}
+
+export interface AgentDetail {
+  agent: AgentNode;
+  events: TimelineEvent[];
+  truncated: boolean;
 }

@@ -17,6 +17,7 @@ npx agents-dashboard
 
 - Session list: project, client (desktop / CLI / VS Code), title, last activity, cost, live status.
 - Session detail: timeline of messages and tool calls, token totals.
+- Sub-agents: tree of the agents a session spawned (nested ones included), each with its own timeline loaded on demand. Their tokens are shown separately and are not added to the session totals.
 - Stats: total cost, daily cost chart (last 30 days), breakdown by project and by model.
 - Live refresh through Server-Sent Events.
 

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeStats, getSession, listSessions } from "../core/index.ts";
+import { computeStats, getAgent, getSession, listSessions } from "../core/index.ts";
 import { liveSessions } from "../core/live.ts";
 
 const UI_DIR = fileURLToPath(new URL("../../ui/", import.meta.url));
@@ -92,8 +92,17 @@ export function createDashboard({ claudeDir }: Options): Server {
     if (path === "/api/sessions") return json(res, 200, { sessions: await listSessions(claudeDir) });
 
     if (path.startsWith("/api/sessions/")) {
-      const detail = await getSession(claudeDir, decodeURIComponent(path.slice("/api/sessions/".length)));
-      return detail ? json(res, 200, detail) : json(res, 404, { error: "not found" });
+      let parts: string[];
+      try {
+        parts = path.slice("/api/sessions/".length).split("/").map(decodeURIComponent);
+      } catch {
+        return json(res, 400, { error: "bad path" });
+      }
+      const [sessionId = "", sub, agentId] = parts;
+      let result = null;
+      if (parts.length === 1) result = await getSession(claudeDir, sessionId);
+      else if (parts.length === 3 && sub === "agents" && agentId) result = await getAgent(claudeDir, sessionId, agentId);
+      return result ? json(res, 200, result) : json(res, 404, { error: "not found" });
     }
 
     if (path === "/api/events") {

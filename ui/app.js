@@ -63,7 +63,13 @@ async function renderList() {
                 { href: `#/s/${encodeURIComponent(s.id)}` },
                 h("div", { class: "title" }, s.active ? h("span", { class: "dot", title: "running" }) : null, sessionTitle(s)),
                 h("div", { class: "right" }, ago(s.updatedAt)),
-                h("div", { class: "meta" }, h("span", { class: "badge" }, clientName(s.entrypoint)), projectName(s)),
+                h(
+                  "div",
+                  { class: "meta" },
+                  h("span", { class: "badge" }, clientName(s.entrypoint)),
+                  s.agents ? h("span", { class: "badge" }, `${s.agents} ${s.agents === 1 ? "agent" : "agents"}`) : null,
+                  projectName(s),
+                ),
                 h("div", { class: "right" }, money(s.costUSD)),
               ),
             ),
@@ -93,6 +99,57 @@ async function renderList() {
 // ---------- detail view ----------
 const LABEL = { user: "You", assistant: "Claude", tool_use: "Tool call", tool_result: "Result" };
 
+function eventEl(e) {
+  return h(
+    "div",
+    { class: `ev ${e.kind}` },
+    h("div", { class: "who" }, e.tool ? `${LABEL[e.kind]} · ${e.tool}` : LABEL[e.kind], e.ts ? ` · ${new Date(e.ts).toLocaleTimeString()}` : ""),
+    h("pre", {}, e.text),
+  );
+}
+
+// Sub-agents are listed as a tree; each one loads its own timeline only when opened.
+function agentSection(sessionId, agents) {
+  if (!agents.length) return null;
+  const rows = agents.map((a) => {
+    const body = h("div", { class: "timeline agent-body" });
+    let loaded = false;
+    const det = h(
+      "details",
+      { class: `agent d${Math.min(a.depth, 4)}` },
+      h(
+        "summary",
+        {},
+        h("b", {}, a.type),
+        ` ${a.description}`,
+        h("span", { class: "muted" }, ` · ${a.model ?? "?"} · ${num(a.totals.outputTokens)} out · ${num(a.totals.toolCalls)} tools`),
+        a.finished ? null : h("span", { class: "badge" }, "unfinished"),
+      ),
+      body,
+    );
+    det.addEventListener("toggle", async () => {
+      if (!det.open || loaded) return;
+      loaded = true;
+      body.textContent = "Loading…";
+      try {
+        const r = await api(`/api/sessions/${encodeURIComponent(sessionId)}/agents/${encodeURIComponent(a.id)}`);
+        body.replaceChildren(...r.events.map(eventEl), ...(r.truncated ? [h("div", { class: "empty" }, "Timeline truncated (too long).")] : []));
+      } catch {
+        loaded = false;
+        body.textContent = "Could not load this agent.";
+      }
+    });
+    return det;
+  });
+  return h(
+    "div",
+    {},
+    h("h3", {}, `Sub-agents (${agents.length})`),
+    rows,
+    h("p", { class: "muted" }, "Sub-agent tokens are shown separately and are not added to the session totals above."),
+  );
+}
+
 async function renderDetail(id) {
   const d = await api(`/api/sessions/${encodeURIComponent(id)}`);
   const s = d.summary;
@@ -112,17 +169,12 @@ async function renderDetail(id) {
       stat("output tokens", num(d.totals.outputTokens)),
       stat("cache read", num(d.totals.cacheReadTokens)),
     ),
+    agentSection(s.id, d.agents),
+    h("h3", {}, "Timeline"),
     h(
       "div",
       { class: "timeline" },
-      d.events.map((e) =>
-        h(
-          "div",
-          { class: `ev ${e.kind}` },
-          h("div", { class: "who" }, e.tool ? `${LABEL[e.kind]} · ${e.tool}` : LABEL[e.kind], e.ts ? ` · ${new Date(e.ts).toLocaleTimeString()}` : ""),
-          h("pre", {}, e.text),
-        ),
-      ),
+      d.events.map(eventEl),
       d.truncated ? h("div", { class: "empty" }, "Timeline truncated (too long).") : null,
     ),
   );
@@ -221,6 +273,7 @@ let t;
 new EventSource("/api/events").addEventListener("change", () => {
   clearTimeout(t);
   // Do not wipe the search box while the user is typing in it.
-  t = setTimeout(() => document.activeElement?.tagName !== "INPUT" && route(), 400);
+  // ...nor collapse a sub-agent the user has just opened.
+  t = setTimeout(() => document.activeElement?.tagName !== "INPUT" && !document.querySelector("details[open]") && route(), 400);
 });
 route();
