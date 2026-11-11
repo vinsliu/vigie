@@ -23,6 +23,7 @@ export async function getSession(claudeDir: string, id: string): Promise<Session
     summary,
     events: body.events,
     truncated: body.truncated,
+    omitted: body.omitted,
     totals: body.totals,
     agents,
     resumeCommand: resumeCommand(summary.cwd, summary.id),

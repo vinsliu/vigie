@@ -565,7 +565,7 @@ function agentsCard(sessionId, agents) {
       body.textContent = "Loading…";
       try {
         const r = await api(`/api/sessions/${encodeURIComponent(sessionId)}/agents/${encodeURIComponent(a.id)}`);
-        body.replaceChildren(...r.events.map(eventEl), ...(r.truncated ? [h("div", { class: "empty" }, "Timeline truncated (too long).")] : []));
+        body.replaceChildren(...r.events.map(eventEl), ...(r.truncated ? [truncatedNote(r)] : []));
       } catch {
         loaded = false;
         body.textContent = "Could not load this agent.";
@@ -623,10 +623,15 @@ function renderDetail(d) {
         "section",
         { class: "card" },
         h("h2", { class: "sec-h" }, "Timeline"),
-        h("div", { class: "timeline" }, d.events.map(eventEl), d.truncated ? h("div", { class: "empty" }, "Timeline truncated (too long).") : null),
+        h("div", { class: "timeline" }, d.events.map(eventEl), truncatedNote(d)),
       ),
     ),
   );
+}
+
+// Only the latest events are kept: say how many earlier ones are not shown.
+function truncatedNote(d) {
+  return h("div", { class: "empty" }, `Showing the latest ${num(d.events.length)} events; ${num(d.omitted)} earlier ones are not shown.`);
 }
 
 // ---------- stats page ----------
@@ -770,9 +775,32 @@ addEventListener("keydown", (e) => {
 });
 
 let timer;
-new EventSource("/api/events").addEventListener("change", () => {
+const pending = new Set(); // sessions that changed since the last refresh
+let everything = false; // a change no session explains: reload it all
+new EventSource("/api/events").addEventListener("change", (e) => {
+  try {
+    const ids = JSON.parse(e.data).sessions;
+    if (Array.isArray(ids)) ids.forEach((id) => pending.add(id));
+    else everything = true;
+  } catch {
+    everything = true;
+  }
   clearTimeout(timer);
-  timer = setTimeout(() => {
+  timer = setTimeout(async () => {
+    const ids = new Set(pending);
+    const all = everything;
+    pending.clear();
+    everything = false;
+    // On a session page, a change to another session only updates the counters in the header.
+    if (currentView() === "detail" && !all && !ids.has(decodeURIComponent(location.hash.slice(4)))) {
+      try {
+        state.sessions = (await api("/api/sessions")).sessions;
+        updateStatus(state.sessions.filter((x) => !x.archived));
+      } catch {
+        /* the next change will retry */
+      }
+      return;
+    }
     // Do not wipe the name box while the user types in it, nor collapse a sub-agent they just opened.
     const editing = app.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
     if (currentView() === "detail" && (editing || document.querySelector("details[open]"))) return;

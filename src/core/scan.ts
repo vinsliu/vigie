@@ -153,21 +153,22 @@ export async function listSessions(claudeDir: string): Promise<SessionSummary[]>
     const done = await Promise.all(
       batch.map(async (f) => {
         try {
-          return await cachedSummarize(f.path, f.projectDir);
+          return { s: await cachedSummarize(f.path, f.projectDir), agents: await countAgents(f.path) };
         } catch {
           return null; // file vanished or unreadable
         }
       }),
     );
-    for (const s of done) {
-      if (!s) continue;
+    for (const item of done) {
+      if (!item) continue;
+      const { s, agents } = item;
       const l = live.get(s.id);
       out.push({
         ...s,
         entrypoint: s.entrypoint ?? l?.entrypoint ?? null,
         active: Boolean(l),
         pid: l?.pid ?? null,
-        agents: await countAgents(join(claudeDir, "projects", s.projectDir, `${s.id}.jsonl`)),
+        agents,
         pinned: false,
         alias: null,
         archived: false,

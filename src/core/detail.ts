@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+import { remember } from "./cache.ts";
 import { readLines } from "./lines.ts";
 import { display, parseLine, textOf } from "./text.ts";
 import type { DetailTotals, TimelineEvent } from "./types.ts";
@@ -9,8 +11,11 @@ const MAX_TEXT = 1500;
 const SPAWN_TOOLS = new Set(["Agent", "Task"]);
 
 export interface DetailBody {
+  /** The most recent events (at most MAX_EVENTS), oldest first. */
   events: TimelineEvent[];
   truncated: boolean;
+  /** How many earlier events were left out. */
+  omitted: number;
   totals: DetailTotals;
   /** Ids of the tool calls in this transcript that spawned a sub-agent. */
   spawned: string[];
@@ -35,8 +40,8 @@ function describeInput(input: unknown): string {
   }
 }
 
-/** Stream a full transcript into a bounded timeline plus token totals. */
-export async function readDetail(path: string, opts: { events?: boolean } = {}): Promise<DetailBody> {
+/** Stream a full transcript into a bounded timeline (its latest events) plus token totals. */
+async function parseDetail(path: string, opts: { events?: boolean } = {}): Promise<DetailBody> {
   const wantEvents = opts.events !== false;
   const events: TimelineEvent[] = [];
   const spawned: string[] = [];
@@ -49,13 +54,14 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
     cacheCreationTokens: 0,
   };
   const seen = new Set<string>();
-  let truncated = false;
+  let omitted = 0;
   let startedAt: string | null = null;
   let model: string | null = null;
   const push = (e: TimelineEvent) => {
     if (!wantEvents) return;
-    if (events.length >= MAX_EVENTS) truncated = true;
-    else events.push(e);
+    events.push(e);
+    // Keep the latest events: drop the oldest in batches, so a long transcript costs O(n), not O(n * MAX_EVENTS).
+    if (events.length >= MAX_EVENTS * 2) omitted += events.splice(0, events.length - MAX_EVENTS).length;
   };
 
   for await (const line of readLines(path)) {
@@ -108,5 +114,28 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
       push({ kind: "user", ts, text: display(text, MAX_TEXT) });
     }
   }
-  return { events, truncated, totals, spawned, startedAt, model };
+  if (events.length > MAX_EVENTS) omitted += events.splice(0, events.length - MAX_EVENTS).length;
+  return { events, truncated: omitted > 0, omitted, totals, spawned, startedAt, model };
+}
+
+type Cached = { mtimeMs: number; size: number; body: DetailBody };
+const withEvents = new Map<string, Cached>();
+const withoutEvents = new Map<string, Cached>();
+// A timeline can weigh a few megabytes; the counts-only reads of sub-agents are tiny.
+const MAX_CACHED_TIMELINES = 16;
+const MAX_CACHED_COUNTS = 500;
+
+/**
+ * Like parseDetail, but a transcript that has not changed (same size and modification time) is not read again.
+ * The result is shared between callers: it must not be modified.
+ */
+export async function readDetail(path: string, opts: { events?: boolean } = {}): Promise<DetailBody> {
+  const wantEvents = opts.events !== false;
+  const cache = wantEvents ? withEvents : withoutEvents;
+  const st = await stat(path);
+  const hit = cache.get(path);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.body;
+  const body = await parseDetail(path, opts);
+  remember(cache, path, { mtimeMs: st.mtimeMs, size: st.size, body }, wantEvents ? MAX_CACHED_TIMELINES : MAX_CACHED_COUNTS);
+  return body;
 }

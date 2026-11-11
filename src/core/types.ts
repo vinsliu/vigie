@@ -65,6 +65,8 @@ export interface SessionDetail {
   summary: SessionSummary;
   events: TimelineEvent[];
   truncated: boolean;
+  /** How many earlier events are not shown (only the latest are kept). */
+  omitted: number;
   totals: DetailTotals;
   /** Sub-agents in tree order (parent before its children). */
   agents: AgentNode[];
@@ -76,4 +78,5 @@ export interface AgentDetail {
   agent: AgentNode;
   events: TimelineEvent[];
   truncated: boolean;
+  omitted: number;
 }
