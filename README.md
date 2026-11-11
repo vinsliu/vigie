@@ -61,6 +61,7 @@ npm install && npm start
 - **Light**: zero runtime dependencies, no database, no front-end build step. The JSONL transcripts stay the single source of truth.
 - **Cheap on big files**: the list only reads the head and tail of each transcript; a full transcript is streamed only when you open it.
 - **Secrets masked (best effort)**: API keys and tokens of the common providers, JWTs, private keys, `Authorization` headers, `user:password@` URLs, `NAME=value` secrets, `"password": "…"` values in JSON or YAML and `--password` style flags are replaced by `[redacted]` before text reaches the browser. The masking runs in linear time and looks at the first 64 KB of a text at most, so hostile text cannot freeze the server. It is a safety net for screenshots and screen sharing, not a guarantee: a secret in an unusual format is shown as is.
+- **Single user**: there is no authentication, so anyone with an account on the same machine can reach the local port. Do not run Vigie on a shared machine. See [SECURITY.md](SECURITY.md) for what it protects against and what it does not.
 - **Private**: the server binds to `127.0.0.1` only and rejects any request whose `Host` header is not local (DNS-rebinding protection). Transcripts are rendered as plain text, never as HTML. The only write endpoint (pin / display name) requires a JSON content type and a same-origin request, and accepts at most 4 KB.
 
 ## Development

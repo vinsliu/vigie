@@ -18,6 +18,11 @@ const SINKS: Array<[string, RegExp]> = [
   ["new Function", /new\s+Function\s*\(/],
   ["a style attribute built as text", /setAttribute\(\s*["']style["']/],
   ["style=\"…\" inside a string", /["'`][^"'`\n]*\sstyle\s*=\s*["']/],
+  ["srcdoc", /\.srcdoc\s*=|\bsrcdoc\s*:/],
+  ["setHTMLUnsafe / parseHTMLUnsafe", /\b(set|parse)HTMLUnsafe\b/],
+  ["DOMParser / createContextualFragment", /\bDOMParser\b|createContextualFragment/],
+  ["a javascript: or data: URL", /["'`]\s*(javascript|data)\s*:/i],
+  ["document.domain", /document\.domain/],
 ];
 
 /** Comments may mention these words ("never innerHTML"): only look at the code. */
@@ -31,6 +36,10 @@ describe("UI stays CSP-clean and renders text safely", () => {
     assert.deepEqual(violations('el.setAttribute("style", "left:1px")'), ["a style attribute built as text"]);
     assert.deepEqual(violations("const m = `<i style=\"left:${x}%\"></i>`;"), ['style="…" inside a string']);
     assert.deepEqual(violations("eval(code); new Function('x')").sort(), ["eval", "new Function"]);
+    assert.deepEqual(violations("frame.srcdoc = t"), ["srcdoc"]);
+    assert.deepEqual(violations("el.setHTMLUnsafe(t)"), ["setHTMLUnsafe / parseHTMLUnsafe"]);
+    assert.deepEqual(violations("new DOMParser().parseFromString(t, 'text/html')"), ["DOMParser / createContextualFragment"]);
+    assert.deepEqual(violations("a.href = 'javascript:alert(1)'"), ["a javascript: or data: URL"]);
     // Allowed: CSSOM styling, textContent, and the words appearing only in comments.
     assert.deepEqual(violations("el.style.left = `${x}%`; Object.assign(el.style, { top });"), []);
     assert.deepEqual(violations("el.textContent = t; // never innerHTML\n/* no eval( here */"), []);
