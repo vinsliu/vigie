@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readDetail, type DetailBody } from "./detail.ts";
 import type { AgentDetail, AgentNode } from "./types.ts";
-import { redact } from "./redact.ts";
+import { display } from "./text.ts";
 
 /** Agent ids are short alphanumeric tokens; anything else must never reach the filesystem. */
 export const AGENT_ID = /^[0-9a-z]{6,64}$/i;
@@ -32,9 +32,9 @@ async function readMeta(dir: string, id: string): Promise<Record<string, any>> {
 function node(id: string, meta: Record<string, any>, body: DetailBody): Omit<AgentNode, "depth" | "parentAgentId"> {
   return {
     id,
-    type: typeof meta.agentType === "string" ? meta.agentType : "agent",
-    description: typeof meta.description === "string" ? redact(meta.description) : "",
-    model: body.model ?? (typeof meta.model === "string" ? meta.model : null),
+    type: typeof meta.agentType === "string" ? display(meta.agentType, 80) : "agent",
+    description: typeof meta.description === "string" ? display(meta.description, 300) : "",
+    model: body.model ?? (typeof meta.model === "string" ? display(meta.model, 80) : null),
     finished: meta.finished === true,
     toolUseId: typeof meta.toolUseId === "string" ? meta.toolUseId : null,
     startedAt: body.startedAt,

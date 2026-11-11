@@ -63,7 +63,7 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
     const content = r.message?.content;
 
     if (r.type === "assistant") {
-      if (typeof r.message?.model === "string") model = r.message.model;
+      if (typeof r.message?.model === "string") model = display(r.message.model, 80);
       // One API message is written once per content block with the same id and usage:
       // count messages and tokens once per id.
       const mid = r.message?.id;
@@ -86,7 +86,7 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
           if (b?.type !== "tool_use") continue;
           totals.toolCalls++;
           if (SPAWN_TOOLS.has(b.name) && typeof b.id === "string") spawned.push(b.id);
-          push({ kind: "tool_use", ts, tool: String(b.name ?? "?"), text: display(describeInput(b.input), 400) });
+          push({ kind: "tool_use", ts, tool: display(String(b.name ?? "?"), 80), text: display(describeInput(b.input), 400) });
         }
       }
       continue;
