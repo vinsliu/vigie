@@ -22,7 +22,9 @@ For maintainers. The branch model and the day-to-day flow are in [CONTRIBUTING.m
    ```
 
    The Release workflow checks that the tag matches `package.json` and sits on `main`, runs `npm run check`, and creates the GitHub release with the notes of that CHANGELOG section. If the CHANGELOG has no such section, it fails before publishing anything.
-4. **Realign `dev`.** `git switch dev && git pull --ff-only origin main` (a fast-forward, because `dev` is an ancestor of `main`).
+4. **Realign `dev`.** `git switch dev && git pull --ff-only origin main && git push origin dev`. This is a fast-forward, because `dev` is an ancestor of `main`: no new content is pushed.
+
+   **Never delete `dev` when the release PR is merged.** `dev` is the head branch of that PR, and the repository setting "Automatically delete head branches" would remove it (this happened once on the first promotion, and `dev` was restored from a local copy). That setting must stay **off** while `main` and `dev` are not protected. Delete other branches yourself after merging: `gh pr merge --squash --delete-branch`.
 
 ## Urgent fix on a released version
 
