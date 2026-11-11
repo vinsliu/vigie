@@ -44,7 +44,8 @@ npm install && npm start
 ## Features (MVP)
 
 - **The watch**: a timeline with one lane per project, showing when each session ran. A short session is a dot, a long one a bar; its size follows its cost; a running session pulses at "now". Zoom on 24 h, 7 d or 14 d. Click a mark to open the session.
-- Session list: project, client (desktop / CLI / VS Code), title, last activity, cost, live status. Filter from the sidebar by project, client, running only, archived; search from the header (press `/`).
+- A sidebar that follows the page. On the list: filters by project, client, running only and archived. On a session: show or hide kinds of timeline events (your messages, Claude, tool calls, results), jump to a sub-agent, switch to another session of the same project. On Stats: the period (7, 30 or 90 days). Pinned sessions are always there.
+- Session list: project, client (desktop / CLI / VS Code), title, last activity, cost, live status. Search from the header (press `/`).
 - Session page: timeline of messages and tool calls, token totals. It replaces the list, keeping the sidebar and header in place (`Esc` goes back).
 - Appearance: light, dark or follow the system, and an accent color of your choice (presets or any color). Stored in your browser only.
 - Sub-agents: tree of the agents a session spawned (nested ones included), each with its own timeline loaded on demand. Their tokens are shown separately and are not added to the session totals.

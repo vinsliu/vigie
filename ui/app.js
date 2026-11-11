@@ -62,6 +62,8 @@ const state = {
   span: 14, // days shown by the watch
   moreProjects: false, // sidebar: show every project, not only the 6 most recent
   moreLanes: false, // watch: show every project lane, not only the 8 most recent
+  hiddenKinds: new Set(), // session page: kinds of timeline events the user turned off
+  statsDays: 30, // stats page: period
   filters: { q: "", projects: new Set(), clients: new Set(), activeOnly: false, showArchived: false },
 };
 
@@ -114,7 +116,92 @@ function option(label, checked, onchange, count) {
   );
 }
 
-function renderSide(view) {
+function radio(name, label, checked, onchange) {
+  return h("label", { class: "opt" }, h("input", { type: "radio", name, checked, onchange }), h("span", { class: "lbl" }, label));
+}
+
+// Timeline event kinds, as the server names them.
+const KINDS = [
+  ["user", "Your messages"],
+  ["assistant", "Claude"],
+  ["tool_use", "Tool calls"],
+  ["tool_result", "Results"],
+];
+const applyTimelineFilter = () => (app.dataset.hide = [...state.hiddenKinds].join(" "));
+
+function openAgent(id) {
+  const el = app.querySelector(`details[data-agent="${CSS.escape(id)}"]`);
+  if (!el) return;
+  el.open = true; // loads its timeline
+  el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
+
+// The sidebar follows the page: filters for the list, controls for the session being read, a period for the stats.
+function detailSections(ctx) {
+  const d = ctx.detail;
+  const counts = {};
+  for (const e of d?.events ?? []) counts[e.kind] = (counts[e.kind] ?? 0) + 1;
+  const out = [
+    h("h4", {}, "Timeline"),
+    ...KINDS.map(([k, label]) =>
+      option(
+        label,
+        !state.hiddenKinds.has(k),
+        (e) => {
+          if (e.target.checked) state.hiddenKinds.delete(k);
+          else state.hiddenKinds.add(k);
+          applyTimelineFilter();
+        },
+        d ? `${counts[k] ?? 0}${d.truncated ? "+" : ""}` : undefined,
+      ),
+    ),
+  ];
+  if (d?.agents?.length) {
+    out.push(
+      h("h4", {}, "Sub-agents"),
+      ...d.agents.map((a) =>
+        h("button", { type: "button", class: `jump d${Math.min(a.depth, 4)}`, title: `${a.type} · ${a.description}`, onclick: () => openAgent(a.id) }, h("b", {}, a.type), ` ${a.description}`),
+      ),
+    );
+  }
+  const id = decodeURIComponent(location.hash.slice(4));
+  const s = state.sessions.find((x) => x.id === id);
+  if (s) {
+    const key = projectKey(s);
+    const siblings = state.sessions
+      .filter((x) => projectKey(x) === key && (!x.archived || x.id === s.id))
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+      .slice(0, 8);
+    if (siblings.length > 1) {
+      out.push(
+        h("h4", {}, `In ${projectLabels([key]).get(key)}`),
+        ...siblings.map((x) =>
+          h("a", { class: "side-link", href: sessionHref(x), title: sessionTitle(x), "aria-current": x.id === s.id ? "page" : null }, h("span", { class: `st${x.active ? " live" : ""}` }), h("span", { class: "lbl" }, sessionTitle(x))),
+        ),
+      );
+    }
+  }
+  return out;
+}
+
+const PERIODS = [
+  [7, "7 days"],
+  [30, "30 days"],
+  [90, "90 days"],
+];
+function statsSections() {
+  return [
+    h("h4", {}, "Period"),
+    ...PERIODS.map(([d, label]) =>
+      radio("period", label, state.statsDays === d, () => {
+        state.statsDays = d;
+        renderStats();
+      }),
+    ),
+  ];
+}
+
+function renderSide(view, ctx = {}) {
   const sessions = state.sessions;
   const open = sessions.filter((s) => !s.archived);
   const f = state.filters;
@@ -162,13 +249,17 @@ function renderSide(view) {
       option("Running only", f.activeOnly, (e) => ((f.activeOnly = e.target.checked), drawSessions())),
       option("Archived", f.showArchived, (e) => ((f.showArchived = e.target.checked), drawSessions()), sessions.length - open.length),
     );
+  } else if (view === "detail") {
+    parts.push(...detailSections(ctx));
+  } else if (view === "stats") {
+    parts.push(...statsSections());
   }
 
   const pinned = open.filter((s) => s.pinned);
   if (pinned.length) {
     parts.push(
       h("h4", {}, "Pinned"),
-      ...pinned.map((s) => h("a", { class: "pin-link", href: sessionHref(s), title: sessionTitle(s) }, h("span", {}, sessionTitle(s)))),
+      ...pinned.map((s) => h("a", { class: "side-link", href: sessionHref(s), title: sessionTitle(s) }, h("span", { class: "lbl" }, sessionTitle(s)))),
     );
   }
   parts.push(h("div", { class: "foot" }, "Local only · 127.0.0.1", h("br"), "Never writes to Claude's files."));
@@ -425,7 +516,7 @@ function agentsCard(sessionId, agents) {
     let loaded = false;
     const det = h(
       "details",
-      { class: `agent d${Math.min(a.depth, 4)}` },
+      { class: `agent d${Math.min(a.depth, 4)}`, "data-agent": a.id },
       h(
         "summary",
         {},
@@ -459,9 +550,9 @@ function agentsCard(sessionId, agents) {
   );
 }
 
-async function renderDetail(id) {
-  const d = await api(`/api/sessions/${encodeURIComponent(id)}`);
+function renderDetail(d) {
   const s = d.summary;
+  applyTimelineFilter();
   updateStatus(state.sessions.filter((x) => !x.archived));
   const cell = (label, value) => h("div", {}, h("small", {}, label), h("b", {}, value));
   app.replaceChildren(
@@ -550,7 +641,8 @@ function table(headers, rows) {
 }
 
 async function renderStats() {
-  const s = await api("/api/stats?days=30");
+  const days = state.statsDays;
+  const s = await api(`/api/stats?days=${days}`);
   const kpi = (label, value) => h("div", { class: "card kpi" }, h("small", {}, label), h("b", {}, value));
   const last30 = s.days.reduce((n, d) => n + d.costUSD, 0);
   updateStatus(state.sessions.filter((x) => !x.archived));
@@ -560,7 +652,7 @@ async function renderStats() {
       "div",
       { class: "kpis" },
       kpi("Total cost", money(s.totals.costUSD)),
-      kpi("Last 30 days (est.)", money(last30)),
+      kpi(`Last ${days} days (est.)`, money(last30)),
       kpi("Sessions", num(s.totals.sessions)),
       kpi("Output tokens", num(s.totals.tokens.output)),
       kpi("Cache read tokens", num(s.totals.tokens.cacheRead)),
@@ -568,7 +660,7 @@ async function renderStats() {
     h(
       "section",
       { class: "card" },
-      h("div", { class: "ch" }, h("h3", {}, "Daily cost"), h("span", { class: "sub" }, "last 30 days")),
+      h("div", { class: "ch" }, h("h3", {}, "Daily cost"), h("span", { class: "sub" }, `last ${days} days`)),
       costChart(s.days),
       h("p", { class: "hint" }, "Session and model totals come from Claude's own cost data. A day's cost is an estimate: a session's cost is spread over the days it ran, in proportion to the tokens used."),
     ),
@@ -584,23 +676,30 @@ async function renderStats() {
 // ---------- routing, live refresh, keyboard ----------
 const currentView = () => (location.hash === "#/stats" ? "stats" : /^#\/s\/.+/.test(location.hash) ? "detail" : "sessions");
 
-async function route() {
+async function route({ keepSide = false } = {}) {
   document.body.classList.remove("nav-open");
   $("#menu").setAttribute("aria-expanded", "false");
   try {
     const view = currentView();
     const { sessions } = await api("/api/sessions");
     state.sessions = sessions;
-    // Do not rebuild the sidebar under the user's hands (a focused checkbox would lose focus).
-    if (!side.contains(document.activeElement) || !side.children.length) renderSide(view);
-    if (view === "stats") await renderStats();
-    else if (view === "detail") await renderDetail(decodeURIComponent(location.hash.slice(4)));
-    else drawSessions();
+    // A live refresh must not rebuild the sidebar under the user's hands (a focused checkbox would lose focus).
+    const rebuildSide = !(keepSide && side.contains(document.activeElement)) || !side.children.length;
+    if (view === "detail") {
+      const d = await api(`/api/sessions/${encodeURIComponent(decodeURIComponent(location.hash.slice(4)))}`);
+      if (rebuildSide) renderSide(view, { detail: d }); // needs the session: sub-agents and event counts
+      renderDetail(d);
+    } else {
+      if (rebuildSide) renderSide(view);
+      if (view === "stats") await renderStats();
+      else drawSessions();
+    }
   } catch {
     app.replaceChildren(h("div", { class: "card empty" }, "Could not load data."));
   }
 }
 addEventListener("hashchange", () => {
+  scrollTo(0, 0); // a new page starts at the top
   renderSide(currentView()); // the sidebar content depends on the page
   route();
 });
@@ -634,7 +733,7 @@ new EventSource("/api/events").addEventListener("change", () => {
     // Do not wipe the name box while the user types in it, nor collapse a sub-agent they just opened.
     const editing = app.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
     if (currentView() === "detail" && (editing || document.querySelector("details[open]"))) return;
-    route();
+    route({ keepSide: true });
   }, 400);
 });
 route();
