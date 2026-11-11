@@ -23,15 +23,27 @@ npm start          # http://127.0.0.1:4317, reads ~/.claude
 npm run demo       # http://127.0.0.1:4318, made-up data only
 ```
 
-Before a pull request:
+## Workflow
 
-```bash
-npm run typecheck
-npm test
-npm run build
+Two long-lived branches:
+
+- **`main`** is stable: what the README tells people to install, and where releases are tagged.
+- **`dev`** is where work is integrated. It is the base of every pull request.
+
+```
+feat/period-filter ─┐                         ┌─ tag v0.2.0
+fix/drawer-close ───┼─► PR (squash) ─► dev ─► PR (merge) ─► main
+chore/ci-cache ─────┘
 ```
 
-The same three steps run in CI on Linux and macOS, Node 22.18 and 24.
+1. Branch from `dev`: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`, `refactor/<topic>`, `chore/<topic>`.
+2. Commit with [Conventional Commits](https://www.conventionalcommits.org/): `feat(ui): add a period filter`, `fix: close the drawer on a click outside`. Types: `feat fix docs style refactor perf test build ci chore revert`. Run `npm run hooks` once per clone to have this checked locally.
+3. Before pushing, run `npm run check` (typecheck, tests, build). CI runs the same on Linux and macOS, Node 22.18 and 24.
+4. Open a pull request **against `dev`**. Its title must be conventional too: it becomes the commit message when squashed. Fill in the checklist.
+5. User-facing change? Add a line under `[Unreleased]` in `CHANGELOG.md`, and refresh the README and screenshots if the interface changed.
+6. Once CI is green, the PR is squash-merged into `dev` and its branch is deleted.
+
+Never push straight to `main` or `dev`. Releases and urgent fixes are described in [RELEASING.md](RELEASING.md).
 
 ## Tests and fixtures
 
