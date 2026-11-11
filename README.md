@@ -1,6 +1,8 @@
-# vigie
+# Vigie
 
-A lightweight, **local-only** dashboard to browse every Claude session on your machine — whether it was started from the Claude desktop app, the CLI or the VS Code extension.
+A lightweight, **local-only** dashboard for your **Claude Code** sessions: browse them, see what they cost and which sub-agents they spawned.
+
+It reads the transcripts Claude Code writes in `~/.claude`, whichever client started the session. So far it has only been tested with sessions started from the Claude desktop app (Code tab). CLI and VS Code sessions use the same files and should show up too, but that is not verified yet.
 
 Read-only by design: it never modifies your Claude files and never runs anything on your behalf.
 
@@ -23,6 +25,8 @@ npm install && npm start
 ## Scope
 
 - **Local only.** It reads the session files Claude already writes in `~/.claude` (or `$CLAUDE_CONFIG_DIR`). No account, no cloud, no telemetry, no outgoing request.
+- **Claude Code only.** Cowork sessions (the desktop app keeps them elsewhere, in another format) and claude.ai chat conversations are not read.
+- A session only shows up while its transcript still exists in `~/.claude`: if Claude has deleted it, it is gone from Vigie too.
 - Remote sessions (Claude Code on the web, other machines, SSH hosts) are out of scope. Each machine has its own view.
 - **Never modifies Claude's files.** Pins and display names are stored in the dashboard's own file (`~/.config/vigie/meta.json`, or `--data-dir`). Renaming here does not rename the session in Claude.
 - **Never runs commands.** "Resume" only gives you a command to copy and run yourself.

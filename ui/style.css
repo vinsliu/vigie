@@ -6,10 +6,11 @@
   --card: #ffffff;
   --accent: #c2410c;
   --ok: #15803d;
-  color-scheme: light dark;
+  color-scheme: light;
 }
+/* Dark palette: used when the system is dark (unless Light is forced) or when Dark is forced. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #161412;
     --fg: #f5f5f4;
     --muted: #a8a29e;
@@ -17,7 +18,18 @@
     --card: #1d1a18;
     --accent: #fb923c;
     --ok: #4ade80;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #161412;
+  --fg: #f5f5f4;
+  --muted: #a8a29e;
+  --line: #2c2825;
+  --card: #1d1a18;
+  --accent: #fb923c;
+  --ok: #4ade80;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
@@ -34,6 +46,7 @@ header {
   border-bottom: 1px solid var(--line);
 }
 .brand { font-weight: 600; color: var(--fg); text-decoration: none; }
+.theme { margin-left: auto; font-size: 12px; padding: 3px 10px; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px; }
 .muted { color: var(--muted); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }

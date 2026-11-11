@@ -1,7 +1,7 @@
 {
   "name": "vigie",
   "version": "0.1.0",
-  "description": "A lightweight, local-only dashboard to browse your Claude sessions (Desktop, CLI, VS Code).",
+  "description": "A lightweight, local-only dashboard to browse your Claude Code sessions (desktop app, CLI, VS Code).",
   "license": "MIT",
   "type": "module",
   "bin": {
