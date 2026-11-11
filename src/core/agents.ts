@@ -118,5 +118,6 @@ export async function readAgentDetail(transcript: string, id: string): Promise<A
     agent: { ...node(id, meta, body), depth: 1, parentAgentId: null },
     events: body.events,
     truncated: body.truncated,
+    omitted: body.omitted,
   };
 }

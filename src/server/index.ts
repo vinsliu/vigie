@@ -94,6 +94,15 @@ function readBody(req: IncomingMessage): Promise<string | null> {
   });
 }
 
+/**
+ * Which session a change under `<claudeDir>/projects` belongs to: `<project>/<id>.jsonl` or
+ * `<project>/<id>/subagents/…`. Null when the path says nothing about one session.
+ */
+export function sessionOfChange(filename: string | null): string | null {
+  const id = (filename ?? "").split(/[\\/]/)[1]?.replace(/\.jsonl$/, "") ?? "";
+  return SESSION_ID.test(id) ? id : null;
+}
+
 /** More live-update connections than any real use needs: beyond this, new ones are refused. */
 const MAX_EVENT_CLIENTS = 32;
 
@@ -101,20 +110,31 @@ export function createDashboard({ claudeDir, dataDir }: Options): Server {
   const clients = new Set<ServerResponse>();
   const watchers: FSWatcher[] = [];
   let timer: NodeJS.Timeout | undefined;
-  let liveKey = "";
+  let live = new Set<string>();
   let poll: NodeJS.Timeout | undefined;
 
+  // Sessions that changed since the last message. `unknown` = something changed that no session explains.
+  const changed = new Set<string>();
+  let unknown = false;
   const broadcast = () => {
-    for (const c of clients) c.write("event: change\ndata: {}\n\n");
+    // {"sessions": [...]} names what changed so a page can ignore the rest; {} means "reload everything".
+    const data = JSON.stringify(unknown || changed.size === 0 ? {} : { sessions: [...changed] });
+    changed.clear();
+    unknown = false;
+    for (const c of clients) c.write(`event: change\ndata: ${data}\n\n`);
   };
-  const schedule = () => {
+  const schedule = (id: string | null) => {
+    if (id) changed.add(id);
+    else unknown = true;
     clearTimeout(timer);
     timer = setTimeout(broadcast, 300);
   };
   const startWatching = () => {
     for (const sub of ["projects", "sessions"]) {
       try {
-        const w = watch(join(claudeDir, sub), { recursive: true }, schedule);
+        const w = watch(join(claudeDir, sub), { recursive: true }, (_event, name) =>
+          schedule(sub === "projects" ? sessionOfChange(name as string | null) : null),
+        );
         w.on("error", () => {});
         watchers.push(w);
       } catch {
@@ -124,11 +144,10 @@ export function createDashboard({ claudeDir, dataDir }: Options): Server {
     // A process can die without touching any file: re-check liveness while someone is looking.
     poll = setInterval(async () => {
       if (clients.size === 0) return;
-      const key = [...(await liveSessions(claudeDir)).keys()].sort().join(",");
-      if (key !== liveKey) {
-        liveKey = key;
-        broadcast();
-      }
+      const now = new Set((await liveSessions(claudeDir)).keys());
+      const flipped = [...now].filter((id) => !live.has(id)).concat([...live].filter((id) => !now.has(id)));
+      live = now;
+      for (const id of flipped) schedule(id);
     }, 5000);
     poll.unref();
   };
@@ -164,6 +183,8 @@ export function createDashboard({ claudeDir, dataDir }: Options): Server {
     if (!patch) return json(res, 400, { error: "invalid body" });
     if (!(await findTranscript(claudeDir, id))) return json(res, 404, { error: "not found" });
     const meta = await updateMeta(dataDir, id, patch);
+    changed.add(id);
+    clearTimeout(timer);
     broadcast();
     return json(res, 200, { pinned: meta.pinned === true, alias: meta.alias ?? null, archived: meta.archived === true });
   };
