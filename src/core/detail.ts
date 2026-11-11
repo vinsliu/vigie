@@ -1,5 +1,4 @@
-import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
+import { readLines } from "./lines.ts";
 import { display, parseLine, textOf } from "./text.ts";
 import type { DetailTotals, TimelineEvent } from "./types.ts";
 
@@ -28,7 +27,12 @@ function describeInput(input: unknown): string {
   if (!input || typeof input !== "object") return "";
   const o = input as Record<string, unknown>;
   const pick = o.command ?? o.file_path ?? o.path ?? o.pattern ?? o.url ?? o.description ?? o.query;
-  return typeof pick === "string" ? pick : JSON.stringify(o);
+  if (typeof pick === "string") return pick;
+  try {
+    return JSON.stringify(o);
+  } catch {
+    return "[input too deeply nested to show]"; // JSON.stringify throws on hostile nesting; the session must still open
+  }
 }
 
 /** Stream a full transcript into a bounded timeline plus token totals. */
@@ -54,8 +58,7 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
     else events.push(e);
   };
 
-  const rl = createInterface({ input: createReadStream(path, { encoding: "utf8" }), crlfDelay: Infinity });
-  for await (const line of rl) {
+  for await (const line of readLines(path)) {
     const r = parseLine(line);
     if (!r || (r.type !== "user" && r.type !== "assistant") || r.isMeta) continue;
     const ts = typeof r.timestamp === "string" ? r.timestamp : null;

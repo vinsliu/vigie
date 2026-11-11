@@ -1,7 +1,7 @@
-import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
+import { remember } from "./cache.ts";
+import { readLines } from "./lines.ts";
 import { listSessions } from "./scan.ts";
 import { parseLine } from "./text.ts";
 
@@ -47,8 +47,7 @@ export function localDay(d: Date): string {
 async function readUsage(path: string): Promise<Usage> {
   const usage: Usage = { byDayModel: new Map(), cost: null, modelCost: new Map() };
   const seen = new Set<string>(); // each API message is written once per content block
-  const rl = createInterface({ input: createReadStream(path, { encoding: "utf8" }), crlfDelay: Infinity });
-  for await (const line of rl) {
+  for await (const line of readLines(path)) {
     const isCost = line.includes('"cost-state"');
     if (!isCost && !line.includes('"usage"')) continue;
     const r = parseLine(line);
@@ -88,12 +87,13 @@ async function readUsage(path: string): Promise<Usage> {
 }
 
 const cache = new Map<string, { mtimeMs: number; size: number; usage: Usage }>();
+const MAX_CACHED_USAGES = 3000;
 async function cachedUsage(path: string): Promise<Usage> {
   const st = await stat(path);
   const hit = cache.get(path);
   if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.usage;
   const usage = await readUsage(path);
-  cache.set(path, { mtimeMs: st.mtimeMs, size: st.size, usage });
+  remember(cache, path, { mtimeMs: st.mtimeMs, size: st.size, usage }, MAX_CACHED_USAGES);
   return usage;
 }
 
