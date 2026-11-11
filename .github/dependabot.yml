@@ -12,6 +12,11 @@ updates:
     groups:
       npm:
         patterns: ["*"]
+    ignore:
+      # Vigie supports Node 22.18 and later: the types must describe Node 22, not newer APIs.
+      # Raising them is a decision tied to raising the minimum Node version, made by hand.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # Actions used by the CI and release workflows.
   - package-ecosystem: github-actions
