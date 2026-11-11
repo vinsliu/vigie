@@ -1,0 +1,51 @@
+name: Bug report
+description: Something does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Please do not paste real transcripts, paths or keys.** They can contain code and secrets.
+        To reproduce with harmless data, run `npm run demo`, or describe the problem in words.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open the Stats page\n2. Choose 90 days\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Vigie version or commit
+      placeholder: "0.1.0, or the short commit hash"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: "node --version"
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Which Claude Code client wrote the sessions?
+      options:
+        - Claude desktop app (Code tab)
+        - CLI
+        - VS Code extension
+        - Another one
+        - Not sure
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: "Safari 19 on macOS"

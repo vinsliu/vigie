@@ -72,11 +72,12 @@ npm install
 npm start          # run from sources
 npm test           # node:test with anonymised fixtures
 npm run typecheck
+npm run check      # typecheck + tests + build: what CI runs
 npm run build      # emits dist/ for publishing
 npm run demo       # serve made-up sessions on :4318 (never reads ~/.claude)
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+`main` is the stable branch; work happens on `dev`: branch from it and open pull requests against it. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening one, [CHANGELOG.md](CHANGELOG.md) for what changed and [RELEASING.md](RELEASING.md) for how releases are made.
 
 Options: `--port <n>` (default `4317`), `--claude-dir <path>`, `--data-dir <path>`.
 
