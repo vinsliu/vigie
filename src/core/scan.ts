@@ -1,8 +1,8 @@
-import { createReadStream } from "node:fs";
 import { open, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { countAgents } from "./agents.ts";
+import { remember } from "./cache.ts";
+import { readLines } from "./lines.ts";
 import { liveSessions } from "./live.ts";
 import { display, parseLine, textOf } from "./text.ts";
 import type { Rec, SessionSummary } from "./types.ts";
@@ -37,8 +37,7 @@ function records(text: string, dropFirst: boolean, dropLast: boolean): Rec[] {
 /** Last `cost-state` of a transcript, found by streaming it entirely (fallback only). */
 async function costByStreaming(path: string): Promise<number | null> {
   let cost: number | null = null;
-  const rl = createInterface({ input: createReadStream(path, { encoding: "utf8" }), crlfDelay: Infinity });
-  for await (const line of rl) {
+  for await (const line of readLines(path)) {
     if (!line.includes('"cost-state"')) continue;
     const r = parseLine(line);
     if (r?.type === "cost-state" && typeof r.totalCostUSD === "number") cost = r.totalCostUSD;
@@ -111,21 +110,23 @@ export async function summarize(
 
 type CacheEntry = { mtimeMs: number; size: number; value: Awaited<ReturnType<typeof summarize>> };
 const cache = new Map<string, CacheEntry>();
+const MAX_CACHED_SUMMARIES = 5000;
 
 async function cachedSummarize(path: string, projectDir: string) {
   const st = await stat(path);
   const hit = cache.get(path);
   if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.value;
   const value = await summarize(path, projectDir);
-  cache.set(path, { mtimeMs: st.mtimeMs, size: st.size, value });
+  remember(cache, path, { mtimeMs: st.mtimeMs, size: st.size, value }, MAX_CACHED_SUMMARIES);
   return value;
 }
 
 export async function listTranscripts(claudeDir: string): Promise<{ path: string; projectDir: string }[]> {
   const root = join(claudeDir, "projects");
+  // Symbolic links are skipped: only real project folders and real transcript files are read.
   let dirs: string[];
   try {
-    dirs = await readdir(root);
+    dirs = (await readdir(root, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
   } catch {
     return [];
   }
@@ -133,11 +134,11 @@ export async function listTranscripts(claudeDir: string): Promise<{ path: string
   await Promise.all(
     dirs.map(async (d) => {
       try {
-        for (const f of await readdir(join(root, d))) {
-          if (f.endsWith(".jsonl")) out.push({ path: join(root, d, f), projectDir: d });
+        for (const f of await readdir(join(root, d), { withFileTypes: true })) {
+          if (f.isFile() && f.name.endsWith(".jsonl")) out.push({ path: join(root, d, f.name), projectDir: d });
         }
       } catch {
-        /* not a directory */
+        /* unreadable folder */
       }
     }),
   );

@@ -35,15 +35,20 @@ export function isLocalHost(host: string | undefined): boolean {
   return typeof host === "string" && LOCAL_HOST.test(host);
 }
 
+/** Sent with every response, the live-update stream included. */
+const SECURITY_HEADERS = {
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Cross-Origin-Resource-Policy": "same-origin",
+  // frame-ancestors / X-Frame-Options: no other site may show Vigie in a frame and trick a click on Pin or Archive.
+  "Content-Security-Policy":
+    "default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  "X-Frame-Options": "DENY",
+} as const;
+
 function send(res: ServerResponse, status: number, body: string | Buffer, type: string): void {
-  res.writeHead(status, {
-    "Content-Type": type,
-    "Cache-Control": "no-store",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
-    "Cross-Origin-Resource-Policy": "same-origin",
-    "Content-Security-Policy": "default-src 'self'; style-src 'self'; script-src 'self'",
-  });
+  res.writeHead(status, { "Content-Type": type, ...SECURITY_HEADERS });
   res.end(body);
 }
 
@@ -68,20 +73,29 @@ export function isSameOrigin(origin: string | undefined, host: string | undefine
   }
 }
 
+/** At most MAX_BODY bytes. Past that it stops reading at once (null): the caller answers 413 and closes the connection. */
 function readBody(req: IncomingMessage): Promise<string | null> {
   return new Promise((resolve) => {
     let size = 0;
-    let tooBig = false;
     const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => {
+    const onData = (c: Buffer) => {
       size += c.length;
-      if (size > MAX_BODY) tooBig = true;
-      else chunks.push(c);
-    });
-    req.on("end", () => resolve(tooBig ? null : Buffer.concat(chunks).toString("utf8")));
+      if (size > MAX_BODY) {
+        req.off("data", onData);
+        req.pause();
+        resolve(null);
+        return;
+      }
+      chunks.push(c);
+    };
+    req.on("data", onData);
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", () => resolve(null));
   });
 }
+
+/** More live-update connections than any real use needs: beyond this, new ones are refused. */
+const MAX_EVENT_CLIENTS = 32;
 
 export function createDashboard({ claudeDir, dataDir }: Options): Server {
   const clients = new Set<ServerResponse>();
@@ -136,7 +150,11 @@ export function createDashboard({ claudeDir, dataDir }: Options): Server {
     }
     if (!SESSION_ID.test(id)) return json(res, 404, { error: "not found" });
     const raw = await readBody(req);
-    if (raw === null) return json(res, 413, { error: "body too large" });
+    if (raw === null) {
+      res.setHeader("Connection", "close"); // the rest of the body is not read: drop the connection once answered
+      res.once("finish", () => req.destroy());
+      return json(res, 413, { error: "body too large" });
+    }
     let patch: MetaPatch | null;
     try {
       patch = parsePatch(JSON.parse(raw));
@@ -190,11 +208,8 @@ export function createDashboard({ claudeDir, dataDir }: Options): Server {
     }
 
     if (path === "/api/events") {
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-store",
-        Connection: "keep-alive",
-      });
+      if (clients.size >= MAX_EVENT_CLIENTS) return send(res, 503, "Too many open connections", "text/plain");
+      res.writeHead(200, { "Content-Type": "text/event-stream", Connection: "keep-alive", ...SECURITY_HEADERS });
       res.write(": ok\n\n");
       clients.add(res);
       const ka = setInterval(() => res.write(": ka\n\n"), 25000);
