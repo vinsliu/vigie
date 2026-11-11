@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getSession, listSessions } from "../core/index.ts";
+import { computeStats, getSession, listSessions } from "../core/index.ts";
 import { liveSessions } from "../core/live.ts";
 
 const UI_DIR = fileURLToPath(new URL("../../ui/", import.meta.url));
@@ -83,6 +83,11 @@ export function createDashboard({ claudeDir }: Options): Server {
 
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
+
+    if (path === "/api/stats") {
+      const n = Number(url.searchParams.get("days"));
+      return json(res, 200, await computeStats(claudeDir, { days: Number.isInteger(n) && n >= 1 && n <= 365 ? n : 30 }));
+    }
 
     if (path === "/api/sessions") return json(res, 200, { sessions: await listSessions(claudeDir) });
 

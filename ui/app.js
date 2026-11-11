@@ -128,11 +128,89 @@ async function renderDetail(id) {
   );
 }
 
+// ---------- stats view ----------
+const SVG = "http://www.w3.org/2000/svg";
+function svg(tag, attrs, ...kids) {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs ?? {})) el.setAttribute(k, v);
+  for (const kid of kids) if (kid) el.append(kid);
+  return el;
+}
+
+function costChart(days) {
+  const W = 700, H = 170, padL = 40, padB = 20, padT = 8;
+  const max = Math.max(0.01, ...days.map((d) => d.costUSD));
+  const slot = (W - padL) / days.length;
+  const barW = Math.max(2, slot - 3);
+  const y = (v) => padT + (H - padT - padB) * (1 - v / max);
+  const chart = svg("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Estimated daily cost" });
+  for (const f of [0, 0.5, 1]) {
+    const gy = y(max * f);
+    chart.append(svg("line", { class: "grid", x1: padL, x2: W, y1: gy, y2: gy }));
+    const label = svg("text", { x: padL - 6, y: gy + 3, "text-anchor": "end" });
+    label.textContent = money(max * f);
+    chart.append(label);
+  }
+  days.forEach((d, i) => {
+    const top = y(d.costUSD);
+    const tip = svg("title");
+    tip.textContent = `${d.date} · ${money(d.costUSD)} · ${num(d.tokens.output)} output tokens · ${d.sessions} sessions`;
+    chart.append(svg("rect", { class: "bar", x: padL + i * slot + 1, y: top, width: barW, height: Math.max(0, H - padB - top) }, tip));
+    if (i === 0 || i === days.length - 1 || i === Math.floor(days.length / 2)) {
+      const t = svg("text", { x: padL + i * slot + barW / 2, y: H - 5, "text-anchor": i === 0 ? "start" : i === days.length - 1 ? "end" : "middle" });
+      t.textContent = d.date.slice(5);
+      chart.append(t);
+    }
+  });
+  return chart;
+}
+
+function table(headers, rows) {
+  return h(
+    "div",
+    { class: "table-wrap" },
+    h(
+      "table",
+      {},
+      h("thead", {}, h("tr", {}, headers.map((x, i) => h("th", { class: i ? "num" : "" }, x)))),
+      h("tbody", {}, rows.map((r) => h("tr", {}, r.map((c, i) => h("td", { class: i ? "num" : "" }, String(c)))))),
+    ),
+  );
+}
+
+async function renderStats() {
+  const s = await api("/api/stats?days=30");
+  const stat = (label, value) => h("div", { class: "stat" }, h("b", {}, value), label);
+  const last30 = s.days.reduce((n, d) => n + d.costUSD, 0);
+  statusEl.textContent = "";
+  app.replaceChildren(
+    h(
+      "div",
+      { class: "stats" },
+      stat("total cost", money(s.totals.costUSD)),
+      stat("last 30 days (est.)", money(last30)),
+      stat("sessions", num(s.totals.sessions)),
+      stat("output tokens", num(s.totals.tokens.output)),
+      stat("cache read tokens", num(s.totals.tokens.cacheRead)),
+    ),
+    h("h3", {}, "Daily cost, last 30 days"),
+    costChart(s.days),
+    h("p", { class: "muted" }, "Session and model totals come from Claude's own cost data. A day's cost is an estimate: a session's cost is spread over the days it ran, in proportion to the tokens used."),
+    h("h3", {}, "By project"),
+    table(["Project", "Sessions", "Cost", "Output tokens"], s.projects.map((p) => [p.project, p.sessions, money(p.costUSD), num(p.tokens.output)])),
+    h("h3", {}, "By model"),
+    table(["Model", "Cost", "Input", "Output", "Cache read"], s.models.map((m) => [m.model, money(m.costUSD), num(m.tokens.input), num(m.tokens.output), num(m.tokens.cacheRead)])),
+  );
+}
+
 // ---------- routing + live refresh ----------
 async function route() {
   try {
-    const m = location.hash.match(/^#\/s\/(.+)$/);
-    await (m ? renderDetail(decodeURIComponent(m[1])) : renderList());
+    const hash = location.hash;
+    document.getElementById("nav-stats").classList.toggle("current", hash === "#/stats");
+    document.getElementById("nav-sessions").classList.toggle("current", hash !== "#/stats");
+    const m = hash.match(/^#\/s\/(.+)$/);
+    await (hash === "#/stats" ? renderStats() : m ? renderDetail(decodeURIComponent(m[1])) : renderList());
   } catch {
     app.replaceChildren(h("div", { class: "empty" }, "Could not load data."));
   }

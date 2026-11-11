@@ -29,6 +29,7 @@ export async function readDetail(path: string): Promise<Omit<SessionDetail, "sum
     cacheReadTokens: 0,
     cacheCreationTokens: 0,
   };
+  const seen = new Set<string>();
   let truncated = false;
   const push = (e: TimelineEvent) => {
     if (events.length >= MAX_EVENTS) truncated = true;
@@ -43,13 +44,20 @@ export async function readDetail(path: string): Promise<Omit<SessionDetail, "sum
     const content = r.message?.content;
 
     if (r.type === "assistant") {
-      totals.messages++;
-      const u = r.message?.usage;
-      if (u) {
-        totals.inputTokens += Number(u.input_tokens) || 0;
-        totals.outputTokens += Number(u.output_tokens) || 0;
-        totals.cacheReadTokens += Number(u.cache_read_input_tokens) || 0;
-        totals.cacheCreationTokens += Number(u.cache_creation_input_tokens) || 0;
+      // One API message is written once per content block with the same id and usage:
+      // count messages and tokens once per id.
+      const mid = r.message?.id;
+      const firstOfMessage = typeof mid !== "string" || !seen.has(mid);
+      if (typeof mid === "string") seen.add(mid);
+      if (firstOfMessage) {
+        totals.messages++;
+        const u = r.message?.usage;
+        if (u) {
+          totals.inputTokens += Number(u.input_tokens) || 0;
+          totals.outputTokens += Number(u.output_tokens) || 0;
+          totals.cacheReadTokens += Number(u.cache_read_input_tokens) || 0;
+          totals.cacheCreationTokens += Number(u.cache_creation_input_tokens) || 0;
+        }
       }
       const text = textOf(content);
       if (text) push({ kind: "assistant", ts, text: clip(text, MAX_TEXT) });

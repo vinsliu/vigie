@@ -17,7 +17,10 @@ npx agents-dashboard
 
 - Session list: project, client (desktop / CLI / VS Code), title, last activity, cost, live status.
 - Session detail: timeline of messages and tool calls, token totals.
+- Stats: total cost, daily cost chart (last 30 days), breakdown by project and by model.
 - Live refresh through Server-Sent Events.
+
+> Costs per session, project and model come straight from Claude's own cost data. The cost of a given *day* is an estimate: a session's cost is spread over the days it ran, in proportion to the tokens used.
 
 ## Design goals
 

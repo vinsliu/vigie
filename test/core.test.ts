@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { getSession, listSessions } from "../src/core/index.ts";
+import { computeStats, getSession, listSessions } from "../src/core/index.ts";
+import { localDay } from "../src/core/stats.ts";
 import { createDashboard, isLocalHost } from "../src/server/index.ts";
 
 const FIXTURES = fileURLToPath(new URL("./fixtures/claude/", import.meta.url));
@@ -50,8 +51,28 @@ describe("core", () => {
     assert.equal(d.events[0]?.text, "Add a login page");
     assert.equal(d.events[2]?.tool, "Write");
     assert.equal(d.totals.toolCalls, 1);
+    // msg_1 is written twice (one record per content block): count it once.
+    assert.equal(d.totals.messages, 2);
     assert.equal(d.totals.outputTokens, 20);
     assert.equal(d.totals.cacheReadTokens, 100);
+  });
+
+  it("computes stats with deduplicated tokens and exact per-model cost", async () => {
+    const now = Date.parse("2026-01-03T12:00:00Z");
+    const s = await computeStats(dir, { days: 5, now });
+    assert.equal(s.totals.sessions, 1);
+    assert.equal(s.totals.costUSD, 0.42);
+    assert.equal(s.totals.tokens.output, 20);
+    assert.equal(s.totals.tokens.cacheRead, 100);
+    assert.equal(s.days.length, 5);
+    const day = s.days.find((d) => d.date === localDay(new Date("2026-01-01T12:00:05Z")));
+    assert.ok(day, "activity day is inside the window");
+    assert.ok(Math.abs(day.costUSD - 0.42) < 1e-9, "single day gets the whole cost");
+    assert.equal(day.sessions, 1);
+    assert.equal(s.days.filter((d) => d.costUSD > 0).length, 1);
+    assert.deepEqual(s.projects.map((p) => [p.project, p.sessions, p.costUSD]), [["/tmp/demo", 1, 0.42]]);
+    assert.equal(s.models[0]?.model, "claude-test");
+    assert.equal(s.models[0]?.costUSD, 0.42);
   });
 
   it("rejects ids that are not session ids", async () => {
@@ -82,6 +103,9 @@ describe("server", () => {
 
       assert.equal((await fetch(`${base}/api/sessions/${ID}`)).status, 200);
       assert.equal((await fetch(`${base}/api/sessions/nope`)).status, 404);
+      const stats = await fetch(`${base}/api/stats?days=7`);
+      assert.equal(stats.status, 200);
+      assert.equal(((await stats.json()) as { days: unknown[] }).days.length, 7);
       assert.equal((await fetch(`${base}/`)).status, 200);
       assert.equal((await fetch(`${base}/api/sessions`, { method: "POST" })).status, 405);
       assert.equal((await fetch(`${base}/..%2fpackage.json`)).status, 404);

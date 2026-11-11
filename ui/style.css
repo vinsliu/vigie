@@ -79,4 +79,20 @@ button { cursor: pointer; }
 .ev.tool_use, .ev.tool_result { background: transparent; }
 .ev pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; }
 .ev.tool_use pre, .ev.tool_result pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+nav { display: flex; gap: 14px; }
+nav a { color: var(--muted); text-decoration: none; }
+nav a.current { color: var(--fg); font-weight: 500; }
+
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 20px; }
+.chart .bar { fill: var(--accent); }
+.chart .bar:hover { opacity: .75; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart text { fill: var(--muted); font-size: 10px; }
+h3 { margin: 20px 0 8px; font-size: 14px; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
 .empty { padding: 32px; text-align: center; color: var(--muted); }
