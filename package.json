@@ -20,7 +20,8 @@
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "demo": "node scripts/demo.ts"
   },
   "keywords": [
     "claude",

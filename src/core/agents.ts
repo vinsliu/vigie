@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readDetail, type DetailBody } from "./detail.ts";
 import type { AgentDetail, AgentNode } from "./types.ts";
+import { redact } from "./redact.ts";
 
 /** Agent ids are short alphanumeric tokens; anything else must never reach the filesystem. */
 export const AGENT_ID = /^[0-9a-z]{6,64}$/i;
@@ -32,7 +33,7 @@ function node(id: string, meta: Record<string, any>, body: DetailBody): Omit<Age
   return {
     id,
     type: typeof meta.agentType === "string" ? meta.agentType : "agent",
-    description: typeof meta.description === "string" ? meta.description : "",
+    description: typeof meta.description === "string" ? redact(meta.description) : "",
     model: body.model ?? (typeof meta.model === "string" ? meta.model : null),
     finished: meta.finished === true,
     toolUseId: typeof meta.toolUseId === "string" ? meta.toolUseId : null,

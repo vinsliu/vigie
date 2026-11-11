@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
-import { clip, parseLine, textOf } from "./text.ts";
+import { display, parseLine, textOf } from "./text.ts";
 import type { DetailTotals, TimelineEvent } from "./types.ts";
 
 const MAX_EVENTS = 2000;
@@ -80,13 +80,13 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
         }
       }
       const text = textOf(content);
-      if (text) push({ kind: "assistant", ts, text: clip(text, MAX_TEXT) });
+      if (text) push({ kind: "assistant", ts, text: display(text, MAX_TEXT) });
       if (Array.isArray(content)) {
         for (const b of content) {
           if (b?.type !== "tool_use") continue;
           totals.toolCalls++;
           if (SPAWN_TOOLS.has(b.name) && typeof b.id === "string") spawned.push(b.id);
-          push({ kind: "tool_use", ts, tool: String(b.name ?? "?"), text: clip(describeInput(b.input), 400) });
+          push({ kind: "tool_use", ts, tool: String(b.name ?? "?"), text: display(describeInput(b.input), 400) });
         }
       }
       continue;
@@ -95,14 +95,14 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
     // user record: either a human prompt or tool results
     if (Array.isArray(content) && content.some((b) => b?.type === "tool_result")) {
       for (const b of content) {
-        if (b?.type === "tool_result") push({ kind: "tool_result", ts, text: clip(toolResultText(b.content), 600) });
+        if (b?.type === "tool_result") push({ kind: "tool_result", ts, text: display(toolResultText(b.content), 600) });
       }
       continue;
     }
     const text = textOf(content);
     if (text) {
       totals.messages++;
-      push({ kind: "user", ts, text: clip(text, MAX_TEXT) });
+      push({ kind: "user", ts, text: display(text, MAX_TEXT) });
     }
   }
   return { events, truncated, totals, spawned, startedAt, model };

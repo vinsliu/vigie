@@ -1,7 +1,14 @@
 #!/usr/bin/env node
-import { parseArgs } from "node:util";
-import { defaultClaudeDir, defaultDataDir } from "./core/index.ts";
-import { createDashboard } from "./server/index.ts";
+// Checked before loading anything else, so an old Node prints a clear message instead of a stack trace.
+const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
+if (major < 22 || (major === 22 && minor < 18)) {
+  console.error(`Vigie needs Node.js 22.18 or newer (this is ${process.versions.node}).`);
+  process.exit(1);
+}
+
+const { parseArgs } = await import("node:util");
+const { defaultClaudeDir, defaultDataDir } = await import("./core/index.ts");
+const { createDashboard } = await import("./server/index.ts");
 
 const { values } = parseArgs({
   options: {

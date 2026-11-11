@@ -1,3 +1,5 @@
+import { redact } from "./redact.ts";
+
 const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
 
 function clean(s: string): string {
@@ -17,6 +19,11 @@ export function textOf(content: unknown): string {
 
 export function clip(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+/** What the UI may show of a transcript text: secrets masked first, then truncated. */
+export function display(s: string, max: number): string {
+  return clip(redact(s), max);
 }
 
 export function parseLine(line: string): Record<string, any> | null {

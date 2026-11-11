@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { countAgents } from "./agents.ts";
 import { liveSessions } from "./live.ts";
-import { clip, parseLine, textOf } from "./text.ts";
+import { redact } from "./redact.ts";
+import { display, parseLine, textOf } from "./text.ts";
 import type { Rec, SessionSummary } from "./types.ts";
 
 const HEAD_BYTES = 128 * 1024;
@@ -78,14 +79,14 @@ export async function summarize(
     startedAt ??= typeof r.timestamp === "string" ? r.timestamp : null;
     if (firstPrompt === null && r.type === "user" && !r.isMeta) {
       const t = textOf(r.message?.content);
-      if (t) firstPrompt = clip(t, 300);
+      if (t) firstPrompt = display(t, 300);
     }
   }
   // Later records win: they reflect the latest title, prompt, model and cost.
   for (const r of [...head, ...tail]) {
-    if (r.type === "custom-title" && r.customTitle) title = String(r.customTitle);
+    if (r.type === "custom-title" && r.customTitle) title = redact(String(r.customTitle));
     else if (r.type === "agent-name" && r.agentName) agentName = String(r.agentName);
-    else if (r.type === "last-prompt" && typeof r.lastPrompt === "string") lastPrompt = clip(r.lastPrompt, 300);
+    else if (r.type === "last-prompt" && typeof r.lastPrompt === "string") lastPrompt = display(r.lastPrompt, 300);
     else if (r.type === "cost-state" && typeof r.totalCostUSD === "number") cost = r.totalCostUSD;
     else if (r.type === "assistant" && typeof r.message?.model === "string") model = r.message.model;
     version = typeof r.version === "string" ? r.version : version;
