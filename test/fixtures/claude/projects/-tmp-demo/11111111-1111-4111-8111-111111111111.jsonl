@@ -1,0 +1,9 @@
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-01-01T10:00:00.000Z","sessionId":"11111111-1111-4111-8111-111111111111","content":"Add a login page"}
+{"parentUuid":null,"isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>ignored context</system-reminder>"},{"type":"text","text":"Add a login page"}]},"uuid":"u1","timestamp":"2026-01-01T10:00:01.000Z","entrypoint":"cli","cwd":"/tmp/demo","sessionId":"11111111-1111-4111-8111-111111111111","version":"2.0.0"}
+{"type":"assistant","message":{"model":"claude-test","role":"assistant","content":[{"type":"text","text":"I will create the page."},{"type":"tool_use","id":"t1","name":"Write","input":{"file_path":"/tmp/demo/login.tsx","content":"..."}}],"usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":100,"cache_creation_input_tokens":5}},"uuid":"a1","timestamp":"2026-01-01T10:00:05.000Z","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"File created"}]},"uuid":"u2","timestamp":"2026-01-01T10:00:06.000Z","sessionId":"11111111-1111-4111-8111-111111111111"}
+not valid json {{{
+{"type":"custom-title","customTitle":"Login page","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"last-prompt","lastPrompt":"Add a login page","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"cost-state","sessionId":"11111111-1111-4111-8111-111111111111","totalCostUSD":0.25}
+{"type":"cost-state","sessionId":"11111111-1111-4111-8111-111111111111","totalCostUSD":0.42}

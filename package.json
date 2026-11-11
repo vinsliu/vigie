@@ -1,0 +1,36 @@
+{
+  "name": "agents-dashboard",
+  "version": "0.1.0",
+  "description": "A lightweight, local-only dashboard to browse your Claude sessions (Desktop, CLI, VS Code).",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "agents-dashboard": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "ui"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/cli.ts",
+    "dev": "node --watch src/cli.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "dashboard",
+    "sessions",
+    "agents"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
