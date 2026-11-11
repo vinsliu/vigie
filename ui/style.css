@@ -79,6 +79,11 @@ button { cursor: pointer; }
 .ev.tool_use, .ev.tool_result { background: transparent; }
 .ev pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; }
 .ev.tool_use pre, .ev.tool_result pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.actions { margin: 12px 0 4px; }
+.actions .toolbar { margin-bottom: 6px; }
+.actions input[type="text"] { flex: 1 1 260px; }
+.resume code { flex: 1 1 320px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); overflow-x: auto; white-space: nowrap; user-select: all; }
+.pin { color: var(--accent); }
 details.agent { border: 1px solid var(--line); border-radius: 8px; background: var(--card); margin-bottom: 6px; }
 details.agent > summary { cursor: pointer; padding: 8px 12px; overflow: hidden; text-overflow: ellipsis; }
 details.agent > .agent-body { padding: 0 12px 12px; }

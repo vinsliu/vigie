@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
 import http from "node:http";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { computeStats, getAgent, getSession, listSessions } from "../src/core/index.ts";
+import {
+  computeStats,
+  getAgent,
+  getSession,
+  listSessions,
+  parsePatch,
+  pinnedFirst,
+  readMeta,
+  resumeCommand,
+  updateMeta,
+  withMeta,
+} from "../src/core/index.ts";
 import { localDay } from "../src/core/stats.ts";
 import { createDashboard, isLocalHost } from "../src/server/index.ts";
 
@@ -25,6 +36,73 @@ before(async () => {
   await writeFile(join(dir, "sessions", "dead.json"), JSON.stringify({ pid: 2 ** 22 + 1, sessionId: "other" }));
 });
 after(() => rm(dir, { recursive: true, force: true }));
+
+/** node:http request, because fetch() cannot set forbidden headers such as Origin. */
+function request(
+  port: number,
+  method: string,
+  path: string,
+  headers: Record<string, string> = {},
+  body?: string,
+): Promise<{ status: number; json: any }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: "127.0.0.1", port, method, path, headers }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        let json: any = null;
+        try {
+          json = JSON.parse(data);
+        } catch {
+          /* not JSON */
+        }
+        resolve({ status: res.statusCode ?? 0, json });
+      });
+    });
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+describe("management metadata", () => {
+  it("builds a safely quoted resume command", () => {
+    assert.equal(resumeCommand("/tmp/demo", ID), `cd '/tmp/demo' && claude --resume ${ID}`);
+    assert.equal(resumeCommand("/tmp/it's $(x) here", ID), `cd '/tmp/it'\\''s $(x) here' && claude --resume ${ID}`);
+    assert.equal(resumeCommand(null, ID), null);
+    assert.equal(resumeCommand("/tmp/demo", "x; rm -rf ~"), null, "ids that are not session ids are refused");
+    return getSession(dir, ID).then((d) => assert.equal(d?.resumeCommand, `cd '/tmp/demo' && claude --resume ${ID}`));
+  });
+
+  it("validates patches from untrusted input", () => {
+    assert.deepEqual(parsePatch({ pinned: true }), { pinned: true });
+    assert.deepEqual(parsePatch({ alias: "  Hello\nworld  " }), { alias: "Hello world" });
+    assert.deepEqual(parsePatch({ alias: "   " }), { alias: null });
+    assert.deepEqual(parsePatch({ alias: null }), { alias: null });
+    assert.equal((parsePatch({ alias: "x".repeat(500) })?.alias ?? "").length, 120);
+    for (const bad of [null, [], "x", {}, { pinned: "yes" }, { alias: 3 }, { pinned: true, extra: 1 }, { __proto__: 1, x: 1 }]) {
+      assert.equal(parsePatch(bad), null, JSON.stringify(bad));
+    }
+  });
+
+  it("persists pins and aliases in our own file and pins sort first", async () => {
+    const data = join(dir, "meta-unit");
+    assert.deepEqual(await readMeta(data), {}, "missing file means empty");
+    await updateMeta(data, ID, { pinned: true, alias: "Mine" });
+    assert.deepEqual((await readMeta(data))[ID], { pinned: true, alias: "Mine" });
+    await assert.rejects(updateMeta(data, "../evil", { pinned: true }));
+
+    const [s] = await listSessions(dir);
+    assert.ok(s);
+    const pinned = withMeta(s, await readMeta(data));
+    assert.equal(pinned.pinned, true);
+    assert.equal(pinned.alias, "Mine");
+    const other = { ...s, id: "22222222-2222-4222-8222-222222222222", pinned: false };
+    assert.deepEqual(pinnedFirst([other, pinned]).map((x) => x.id), [ID, other.id]);
+
+    await updateMeta(data, ID, { pinned: false, alias: null });
+    assert.deepEqual(await readMeta(data), {}, "empty entries are removed");
+  });
+});
 
 describe("core", () => {
   it("summarises a transcript, tolerating invalid lines and unknown records", async () => {
@@ -122,7 +200,7 @@ describe("server", () => {
   });
 
   it("serves the API, blocks foreign hosts, writes and path traversal", async () => {
-    const server = createDashboard({ claudeDir: dir });
+    const server = createDashboard({ claudeDir: dir, dataDir: join(dir, "data") });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const { port } = server.address() as { port: number };
     const base = `http://127.0.0.1:${port}`;
@@ -154,6 +232,50 @@ describe("server", () => {
           .on("error", reject);
       });
       assert.equal(forged, 403);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((r) => server.close(r));
+    }
+  });
+
+  it("only writes pins and aliases, behind origin, content-type and size checks", async () => {
+    const server = createDashboard({ claudeDir: dir, dataDir: join(dir, "data2") });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const { port } = server.address() as { port: number };
+    const host = `127.0.0.1:${port}`;
+    const json = { "Content-Type": "application/json" };
+    const url = `/api/sessions/${ID}/meta`;
+    const transcript = join(dir, "projects", "-tmp-demo", `${ID}.jsonl`);
+    const before = await readFile(transcript, "utf8");
+    try {
+      const ok = await request(port, "PATCH", url, { ...json, Origin: `http://${host}` }, JSON.stringify({ pinned: true, alias: "My name" }));
+      assert.equal(ok.status, 200);
+      assert.deepEqual(ok.json, { pinned: true, alias: "My name" });
+
+      const list = await request(port, "GET", "/api/sessions");
+      assert.equal(list.json.sessions[0].alias, "My name");
+      assert.equal(list.json.sessions[0].pinned, true);
+      const detail = await request(port, "GET", `/api/sessions/${ID}`);
+      assert.equal(detail.json.summary.alias, "My name");
+
+      const body = JSON.stringify({ pinned: false });
+      assert.equal((await request(port, "PATCH", url, { ...json, Origin: "http://evil.example" }, body)).status, 403);
+      assert.equal((await request(port, "PATCH", url, { ...json, Origin: "http://localhost:9" }, body)).status, 403, "another local origin is still cross-origin");
+      assert.equal((await request(port, "PATCH", url, { ...json, "Sec-Fetch-Site": "cross-site" }, body)).status, 403);
+      assert.equal((await request(port, "PATCH", url, { "Content-Type": "text/plain" }, body)).status, 415);
+      assert.equal((await request(port, "PATCH", url, { "Content-Type": "application/x-www-form-urlencoded" }, "pinned=false")).status, 415);
+      assert.equal((await request(port, "PATCH", url, json, "{nope")).status, 400);
+      assert.equal((await request(port, "PATCH", url, json, JSON.stringify({ pinned: "x" }))).status, 400);
+      assert.equal((await request(port, "PATCH", url, json, JSON.stringify({ alias: "x".repeat(5000) }))).status, 413);
+      assert.equal((await request(port, "PATCH", `/api/sessions/22222222-2222-4222-8222-222222222222/meta`, json, body)).status, 404);
+      assert.equal((await request(port, "PATCH", `/api/sessions/..%2f..%2fx/meta`, json, body)).status, 404);
+      assert.equal((await request(port, "OPTIONS", url, { Origin: "http://evil.example" })).status, 405);
+      assert.equal((await request(port, "DELETE", `/api/sessions/${ID}`)).status, 405);
+      assert.equal((await request(port, "PATCH", `/api/sessions/${ID}`, json, body)).status, 405, "only /meta is writable");
+
+      // Failed attempts changed nothing, and Claude's transcript was never touched.
+      assert.equal((await request(port, "GET", "/api/sessions")).json.sessions[0].pinned, true);
+      assert.equal(await readFile(transcript, "utf8"), before);
     } finally {
       server.closeAllConnections();
       await new Promise((r) => server.close(r));

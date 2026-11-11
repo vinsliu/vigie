@@ -25,7 +25,7 @@ function ago(iso) {
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
   return `${Math.floor(s / 86400)} d ago`;
 }
-const sessionTitle = (s) => s.title || s.firstPrompt || s.id;
+const sessionTitle = (s) => s.alias || s.title || s.firstPrompt || s.id;
 const projectName = (s) => (s.cwd ? s.cwd.split("/").filter(Boolean).slice(-2).join("/") : s.projectDir);
 
 async function api(path) {
@@ -61,7 +61,13 @@ async function renderList() {
               h(
                 "a",
                 { href: `#/s/${encodeURIComponent(s.id)}` },
-                h("div", { class: "title" }, s.active ? h("span", { class: "dot", title: "running" }) : null, sessionTitle(s)),
+                h(
+                  "div",
+                  { class: "title" },
+                  s.active ? h("span", { class: "dot", title: "running" }) : null,
+                  s.pinned ? h("span", { class: "pin", title: "Pinned" }, "★ ") : null,
+                  sessionTitle(s),
+                ),
                 h("div", { class: "right" }, ago(s.updatedAt)),
                 h(
                   "div",
@@ -97,6 +103,67 @@ async function renderList() {
 }
 
 // ---------- detail view ----------
+// Pin / rename only change the dashboard's own metadata file, never Claude's transcripts.
+async function saveMeta(id, body) {
+  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}/meta`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(String(r.status));
+}
+
+function actionsBar(s, d) {
+  const msg = h("span", { class: "muted" });
+  const run = async (body) => {
+    try {
+      await saveMeta(s.id, body);
+      await route();
+    } catch {
+      msg.textContent = "Could not save.";
+    }
+  };
+  const name = h("input", { type: "text", placeholder: "Display name (does not rename the session in Claude)", value: s.alias ?? "", maxLength: 120 });
+  name.addEventListener("keydown", (e) => e.key === "Enter" && run({ alias: name.value }));
+
+  const code = h("code", { class: "mono" }, d.resumeCommand ?? "");
+  const copyBtn = h("button", { type: "button" }, "Copy command");
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(d.resumeCommand);
+      copyBtn.textContent = "Copied ✓";
+    } catch {
+      // Clipboard blocked: select the text so the user can copy it by hand.
+      const range = document.createRange();
+      range.selectNodeContents(code);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      copyBtn.textContent = "Selected: copy it";
+    }
+    setTimeout(() => (copyBtn.textContent = "Copy command"), 2000);
+  });
+
+  return h(
+    "div",
+    { class: "actions" },
+    h(
+      "div",
+      { class: "toolbar" },
+      h("button", { type: "button", onclick: () => run({ pinned: !s.pinned }) }, s.pinned ? "★ Unpin" : "☆ Pin"),
+      name,
+      h("button", { type: "button", onclick: () => run({ alias: name.value }) }, "Save name"),
+      msg,
+    ),
+    d.resumeCommand
+      ? h(
+          "div",
+          { class: "resume" },
+          h("div", { class: "muted" }, "Resume in a terminal (the dashboard never runs commands itself):"),
+          h("div", { class: "toolbar" }, code, copyBtn),
+        )
+      : null,
+  );
+}
 const LABEL = { user: "You", assistant: "Claude", tool_use: "Tool call", tool_result: "Result" };
 
 function eventEl(e) {
@@ -110,7 +177,8 @@ function eventEl(e) {
 
 // Sub-agents are listed as a tree; each one loads its own timeline only when opened.
 function agentSection(sessionId, agents) {
-  if (!agents.length) return null;
+  // Never return null: it is passed to replaceChildren(), which would render the text "null".
+  if (!agents.length) return h("div", {});
   const rows = agents.map((a) => {
     const body = h("div", { class: "timeline agent-body" });
     let loaded = false;
@@ -160,6 +228,7 @@ async function renderDetail(id) {
     h("p", {}, h("a", { href: "#/" }, "← All sessions")),
     h("h2", {}, s.active ? h("span", { class: "dot" }) : null, sessionTitle(s)),
     h("div", { class: "meta mono" }, `${clientName(s.entrypoint)} · ${s.cwd ?? s.projectDir} · ${s.model ?? "?"} · v${s.version ?? "?"} · ${s.id}`),
+    actionsBar(s, d),
     h(
       "div",
       { class: "stats" },

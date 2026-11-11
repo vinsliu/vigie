@@ -11,7 +11,8 @@ npx agents-dashboard
 
 - **Local only.** It reads the session files Claude already writes in `~/.claude` (or `$CLAUDE_CONFIG_DIR`). No account, no cloud, no telemetry, no outgoing request.
 - Remote sessions (Claude Code on the web, other machines, SSH hosts) are out of scope. Each machine has its own view.
-- **Read-only** for now. Management actions (rename, pin, resume) come later.
+- **Never modifies Claude's files.** Pins and display names are stored in the dashboard's own file (`~/.config/agents-dashboard/meta.json`, or `--data-dir`). Renaming here does not rename the session in Claude.
+- **Never runs commands.** "Resume" only gives you a command to copy and run yourself.
 
 ## Features (MVP)
 
@@ -19,6 +20,7 @@ npx agents-dashboard
 - Session detail: timeline of messages and tool calls, token totals.
 - Sub-agents: tree of the agents a session spawned (nested ones included), each with its own timeline loaded on demand. Their tokens are shown separately and are not added to the session totals.
 - Stats: total cost, daily cost chart (last 30 days), breakdown by project and by model.
+- Management: pin a session, give it a display name, copy the command that resumes it (`cd <project> && claude --resume <id>`, POSIX shells).
 - Live refresh through Server-Sent Events.
 
 > Costs per session, project and model come straight from Claude's own cost data. The cost of a given *day* is an estimate: a session's cost is spread over the days it ran, in proportion to the tokens used.
@@ -27,7 +29,7 @@ npx agents-dashboard
 
 - **Light**: zero runtime dependencies, no database, no front-end build step. The JSONL transcripts stay the single source of truth.
 - **Cheap on big files**: the list only reads the head and tail of each transcript; a full transcript is streamed only when you open it.
-- **Private**: the server binds to `127.0.0.1` only and rejects any request whose `Host` header is not local (DNS-rebinding protection). Transcripts are rendered as plain text, never as HTML.
+- **Private**: the server binds to `127.0.0.1` only and rejects any request whose `Host` header is not local (DNS-rebinding protection). Transcripts are rendered as plain text, never as HTML. The only write endpoint (pin / display name) requires a JSON content type and a same-origin request, and accepts at most 4 KB.
 
 ## Development
 
@@ -41,7 +43,7 @@ npm run typecheck
 npm run build      # emits dist/ for publishing
 ```
 
-Options: `--port <n>` (default `4317`), `--claude-dir <path>`.
+Options: `--port <n>` (default `4317`), `--claude-dir <path>`, `--data-dir <path>`.
 
 ## Layout
 

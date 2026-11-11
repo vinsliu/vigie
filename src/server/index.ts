@@ -3,8 +3,21 @@ import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeStats, getAgent, getSession, listSessions } from "../core/index.ts";
+import {
+  computeStats,
+  getAgent,
+  getSession,
+  listSessions,
+  parsePatch,
+  pinnedFirst,
+  readMeta,
+  updateMeta,
+  withMeta,
+} from "../core/index.ts";
+import type { AgentDetail, MetaPatch, SessionDetail } from "../core/index.ts";
 import { liveSessions } from "../core/live.ts";
+import { SESSION_ID } from "../core/paths.ts";
+import { findTranscript } from "../core/scan.ts";
 
 const UI_DIR = fileURLToPath(new URL("../../ui/", import.meta.url));
 
@@ -39,9 +52,38 @@ const json = (res: ServerResponse, status: number, data: unknown) =>
 
 export interface Options {
   claudeDir: string;
+  /** Where our own metadata (pins, aliases) is stored. */
+  dataDir: string;
 }
 
-export function createDashboard({ claudeDir }: Options): Server {
+const MAX_BODY = 4096;
+
+/** CSRF guard: a browser-sent Origin must be exactly the host the request was addressed to. */
+export function isSameOrigin(origin: string | undefined, host: string | undefined): boolean {
+  if (origin === undefined) return true; // not a browser request (curl, tests)
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function readBody(req: IncomingMessage): Promise<string | null> {
+  return new Promise((resolve) => {
+    let size = 0;
+    let tooBig = false;
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_BODY) tooBig = true;
+      else chunks.push(c);
+    });
+    req.on("end", () => resolve(tooBig ? null : Buffer.concat(chunks).toString("utf8")));
+    req.on("error", () => resolve(null));
+  });
+}
+
+export function createDashboard({ claudeDir, dataDir }: Options): Server {
   const clients = new Set<ServerResponse>();
   const watchers: FSWatcher[] = [];
   let timer: NodeJS.Timeout | undefined;
@@ -77,19 +119,56 @@ export function createDashboard({ claudeDir }: Options): Server {
     poll.unref();
   };
 
+  /** The only write route: pin / alias, stored in our own file, never in Claude's transcripts. */
+  const patchMeta = async (req: IncomingMessage, res: ServerResponse, rawId: string) => {
+    if (!isSameOrigin(req.headers.origin, req.headers.host) || req.headers["sec-fetch-site"] === "cross-site") {
+      return send(res, 403, "Forbidden origin", "text/plain");
+    }
+    // A JSON content type cannot be sent by a plain cross-site <form>, and OPTIONS is refused.
+    if (!/^application\/json(\s*;|$)/i.test(req.headers["content-type"] ?? "")) {
+      return send(res, 415, "Expected application/json", "text/plain");
+    }
+    let id: string;
+    try {
+      id = decodeURIComponent(rawId);
+    } catch {
+      return json(res, 400, { error: "bad path" });
+    }
+    if (!SESSION_ID.test(id)) return json(res, 404, { error: "not found" });
+    const raw = await readBody(req);
+    if (raw === null) return json(res, 413, { error: "body too large" });
+    let patch: MetaPatch | null;
+    try {
+      patch = parsePatch(JSON.parse(raw));
+    } catch {
+      patch = null;
+    }
+    if (!patch) return json(res, 400, { error: "invalid body" });
+    if (!(await findTranscript(claudeDir, id))) return json(res, 404, { error: "not found" });
+    const meta = await updateMeta(dataDir, id, patch);
+    broadcast();
+    return json(res, 200, { pinned: meta.pinned === true, alias: meta.alias ?? null });
+  };
+
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     if (!isLocalHost(req.headers.host)) return send(res, 403, "Forbidden host", "text/plain");
-    if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Read-only", "text/plain");
 
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
+
+    const metaRoute = /^\/api\/sessions\/([^/]+)\/meta$/.exec(path);
+    if (req.method === "PATCH" && metaRoute) return patchMeta(req, res, metaRoute[1] ?? "");
+    if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed", "text/plain");
 
     if (path === "/api/stats") {
       const n = Number(url.searchParams.get("days"));
       return json(res, 200, await computeStats(claudeDir, { days: Number.isInteger(n) && n >= 1 && n <= 365 ? n : 30 }));
     }
 
-    if (path === "/api/sessions") return json(res, 200, { sessions: await listSessions(claudeDir) });
+    if (path === "/api/sessions") {
+      const [sessions, metas] = await Promise.all([listSessions(claudeDir), readMeta(dataDir)]);
+      return json(res, 200, { sessions: pinnedFirst(sessions.map((s) => withMeta(s, metas))) });
+    }
 
     if (path.startsWith("/api/sessions/")) {
       let parts: string[];
@@ -99,9 +178,14 @@ export function createDashboard({ claudeDir }: Options): Server {
         return json(res, 400, { error: "bad path" });
       }
       const [sessionId = "", sub, agentId] = parts;
-      let result = null;
-      if (parts.length === 1) result = await getSession(claudeDir, sessionId);
-      else if (parts.length === 3 && sub === "agents" && agentId) result = await getAgent(claudeDir, sessionId, agentId);
+      let result: SessionDetail | AgentDetail | null = null;
+      if (parts.length === 1) {
+        const detail = await getSession(claudeDir, sessionId);
+        if (detail) detail.summary = withMeta(detail.summary, await readMeta(dataDir));
+        result = detail;
+      } else if (parts.length === 3 && sub === "agents" && agentId) {
+        result = await getAgent(claudeDir, sessionId, agentId);
+      }
       return result ? json(res, 200, result) : json(res, 404, { error: "not found" });
     }
 

@@ -50,7 +50,7 @@ async function costByStreaming(path: string): Promise<number | null> {
 export async function summarize(
   path: string,
   projectDir: string,
-): Promise<Omit<SessionSummary, "active" | "pid" | "agents">> {
+): Promise<Omit<SessionSummary, "active" | "pid" | "agents" | "pinned" | "alias">> {
   const st = await stat(path);
   const id = path.slice(path.lastIndexOf("/") + 1).replace(/\.jsonl$/, "");
   const size = st.size;
@@ -167,6 +167,8 @@ export async function listSessions(claudeDir: string): Promise<SessionSummary[]>
         active: Boolean(l),
         pid: l?.pid ?? null,
         agents: await countAgents(join(claudeDir, "projects", s.projectDir, `${s.id}.jsonl`)),
+        pinned: false,
+        alias: null,
       });
     }
   }
@@ -185,6 +187,8 @@ export async function summaryOf(
     active: Boolean(l),
     pid: l?.pid ?? null,
     agents: await countAgents(file.path),
+    pinned: false,
+    alias: null,
   };
 }
 

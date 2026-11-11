@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { defaultClaudeDir } from "./core/index.ts";
+import { defaultClaudeDir, defaultDataDir } from "./core/index.ts";
 import { createDashboard } from "./server/index.ts";
 
 const { values } = parseArgs({
   options: {
     port: { type: "string", short: "p", default: "4317" },
     "claude-dir": { type: "string" },
+    "data-dir": { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
 
 if (values.help) {
-  console.log("Usage: agents-dashboard [--port 4317] [--claude-dir ~/.claude]");
+  console.log("Usage: agents-dashboard [--port 4317] [--claude-dir ~/.claude] [--data-dir ~/.config/agents-dashboard]");
   process.exit(0);
 }
 
@@ -23,7 +24,8 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 const claudeDir = values["claude-dir"] ?? defaultClaudeDir();
-const server = createDashboard({ claudeDir });
+const dataDir = values["data-dir"] ?? defaultDataDir();
+const server = createDashboard({ claudeDir, dataDir });
 
 server.on("error", (e: NodeJS.ErrnoException) => {
   console.error(e.code === "EADDRINUSE" ? `Port ${port} is already in use (try --port).` : e.message);

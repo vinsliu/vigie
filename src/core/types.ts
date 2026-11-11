@@ -21,6 +21,9 @@ export interface SessionSummary {
   pid: number | null;
   /** Number of sub-agents spawned by this session (all depths). */
   agents: number;
+  /** From our own metadata file, never from Claude's transcripts. */
+  pinned: boolean;
+  alias: string | null;
 }
 
 export type TimelineKind = "user" | "assistant" | "tool_use" | "tool_result";
@@ -64,6 +67,8 @@ export interface SessionDetail {
   totals: DetailTotals;
   /** Sub-agents in tree order (parent before its children). */
   agents: AgentNode[];
+  /** Shell command that resumes this session, or null when its folder is unknown. */
+  resumeCommand: string | null;
 }
 
 export interface AgentDetail {
