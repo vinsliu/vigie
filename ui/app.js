@@ -10,7 +10,8 @@ const searchEl = $("#q");
 const tipEl = $("#tip");
 
 const CLIENTS = { "claude-desktop": "Desktop", "claude-vscode": "VS Code", cli: "CLI", "sdk-cli": "CLI" };
-const clientName = (e) => (e ? (CLIENTS[e] ?? e) : "Unknown");
+// Own keys only: an entrypoint read from a transcript could be "constructor" or "__proto__".
+const clientName = (e) => (typeof e === "string" && e ? (Object.hasOwn(CLIENTS, e) ? CLIENTS[e] : e) : "Unknown");
 
 function h(tag, props, ...kids) {
   const el = document.createElement(tag);

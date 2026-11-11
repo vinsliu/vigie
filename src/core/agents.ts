@@ -1,8 +1,8 @@
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readDetail, type DetailBody } from "./detail.ts";
 import type { AgentDetail, AgentNode } from "./types.ts";
-import { redact } from "./redact.ts";
+import { display } from "./text.ts";
 
 /** Agent ids are short alphanumeric tokens; anything else must never reach the filesystem. */
 export const AGENT_ID = /^[0-9a-z]{6,64}$/i;
@@ -12,9 +12,15 @@ const META = /^agent-(.+)\.meta\.json$/;
 /** `<projectDir>/<sessionId>.jsonl` → `<projectDir>/<sessionId>/subagents` */
 const agentsDir = (transcript: string) => `${transcript.replace(/\.jsonl$/, "")}/subagents`;
 
+/** Names of the regular files of a folder. A symbolic link, to the folder or to a file, is never followed. */
+async function regularFiles(dir: string): Promise<Set<string>> {
+  if (!(await lstat(dir)).isDirectory()) return new Set();
+  return new Set((await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile()).map((e) => e.name));
+}
+
 export async function countAgents(transcript: string): Promise<number> {
   try {
-    return (await readdir(agentsDir(transcript))).filter((n) => META.test(n)).length;
+    return [...(await regularFiles(agentsDir(transcript)))].filter((n) => META.test(n)).length;
   } catch {
     return 0;
   }
@@ -32,9 +38,9 @@ async function readMeta(dir: string, id: string): Promise<Record<string, any>> {
 function node(id: string, meta: Record<string, any>, body: DetailBody): Omit<AgentNode, "depth" | "parentAgentId"> {
   return {
     id,
-    type: typeof meta.agentType === "string" ? meta.agentType : "agent",
-    description: typeof meta.description === "string" ? redact(meta.description) : "",
-    model: body.model ?? (typeof meta.model === "string" ? meta.model : null),
+    type: typeof meta.agentType === "string" ? display(meta.agentType, 80) : "agent",
+    description: typeof meta.description === "string" ? display(meta.description, 300) : "",
+    model: body.model ?? (typeof meta.model === "string" ? display(meta.model, 80) : null),
     finished: meta.finished === true,
     toolUseId: typeof meta.toolUseId === "string" ? meta.toolUseId : null,
     startedAt: body.startedAt,
@@ -48,16 +54,16 @@ function node(id: string, meta: Record<string, any>, body: DetailBody): Omit<Age
  */
 export async function readAgents(transcript: string, mainSpawned: string[]): Promise<AgentNode[]> {
   const dir = agentsDir(transcript);
-  let names: string[];
+  let files: Set<string>;
   try {
-    names = await readdir(dir);
+    files = await regularFiles(dir);
   } catch {
     return [];
   }
   const loaded = await Promise.all(
-    names.map(async (n) => {
+    [...files].map(async (n) => {
       const id = META.exec(n)?.[1];
-      if (!id || !AGENT_ID.test(id)) return null;
+      if (!id || !AGENT_ID.test(id) || !files.has(`agent-${id}.jsonl`)) return null;
       try {
         const body = await readDetail(join(dir, `agent-${id}.jsonl`), { events: false });
         return { id, meta: await readMeta(dir, id), body };
@@ -102,6 +108,7 @@ export async function readAgentDetail(transcript: string, id: string): Promise<A
   const dir = agentsDir(transcript);
   let body: DetailBody;
   try {
+    if (!(await regularFiles(dir)).has(`agent-${id}.jsonl`)) return null;
     body = await readDetail(join(dir, `agent-${id}.jsonl`));
   } catch {
     return null;

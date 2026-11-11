@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SESSION_ID } from "./paths.ts";
@@ -57,11 +58,18 @@ export function updateMeta(dataDir: string, id: string, patch: MetaPatch): Promi
     }
     if (Object.keys(cur).length) all[id] = cur;
     else delete all[id];
-    await mkdir(dataDir, { recursive: true });
+    // Private folder, and a temporary file that must not exist yet ("wx"): a link planted at a predictable
+    // name in a shared folder (--data-dir /tmp/x) can never be followed.
+    await mkdir(dataDir, { recursive: true, mode: 0o700 });
     const file = join(dataDir, "meta.json");
-    const tmp = `${file}.${process.pid}.tmp`;
-    await writeFile(tmp, JSON.stringify({ version: 1, sessions: all }, null, 2), { mode: 0o600 });
-    await rename(tmp, file);
+    const tmp = join(dataDir, `.meta.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
+    try {
+      await writeFile(tmp, JSON.stringify({ version: 1, sessions: all }, null, 2), { mode: 0o600, flag: "wx" });
+      await rename(tmp, file);
+    } catch (e) {
+      await rm(tmp, { force: true });
+      throw e;
+    }
     return cur;
   };
   const p = queue.then(run, run);
@@ -87,7 +95,8 @@ export function parsePatch(body: unknown): MetaPatch | null {
   if ("alias" in b) {
     if (b.alias === null) patch.alias = null;
     else if (typeof b.alias === "string") {
-      const a = b.alias.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, MAX_ALIAS);
+      // Control characters, and the invisible or direction-changing ones that make a name read differently from what it says.
+      const a = b.alias.replace(INVISIBLE, " ").trim().slice(0, MAX_ALIAS);
       patch.alias = a || null;
     } else return null;
   }
@@ -106,11 +115,19 @@ export function pinnedFirst<T extends SessionSummary>(list: T[]): T[] {
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+// C0/C1 controls, zero-width and bidirectional marks, line and paragraph separators, byte order mark.
+const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g;
+const MAX_CWD = 1024;
+
 /**
  * Command to resume a session from a POSIX shell. It must run from the session's own folder, since
  * Claude resolves sessions per project. We only ever build the text: nothing is executed here.
  */
 export function resumeCommand(cwd: string | null, id: string): string | null {
   if (!cwd || !SESSION_ID.test(id)) return null;
+  // Quoting makes the folder name inert, but a control character (a newline, Ctrl-C, an escape sequence) would
+  // still travel to the user's terminal when they paste the command. Such a path gets no command at all.
+  if (cwd.length > MAX_CWD || CONTROL.test(cwd)) return null;
   return `cd ${shellQuote(cwd)} && claude --resume ${id}`;
 }

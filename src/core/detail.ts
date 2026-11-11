@@ -1,5 +1,4 @@
-import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
+import { readLines } from "./lines.ts";
 import { display, parseLine, textOf } from "./text.ts";
 import type { DetailTotals, TimelineEvent } from "./types.ts";
 
@@ -28,7 +27,12 @@ function describeInput(input: unknown): string {
   if (!input || typeof input !== "object") return "";
   const o = input as Record<string, unknown>;
   const pick = o.command ?? o.file_path ?? o.path ?? o.pattern ?? o.url ?? o.description ?? o.query;
-  return typeof pick === "string" ? pick : JSON.stringify(o);
+  if (typeof pick === "string") return pick;
+  try {
+    return JSON.stringify(o);
+  } catch {
+    return "[input too deeply nested to show]"; // JSON.stringify throws on hostile nesting; the session must still open
+  }
 }
 
 /** Stream a full transcript into a bounded timeline plus token totals. */
@@ -54,8 +58,7 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
     else events.push(e);
   };
 
-  const rl = createInterface({ input: createReadStream(path, { encoding: "utf8" }), crlfDelay: Infinity });
-  for await (const line of rl) {
+  for await (const line of readLines(path)) {
     const r = parseLine(line);
     if (!r || (r.type !== "user" && r.type !== "assistant") || r.isMeta) continue;
     const ts = typeof r.timestamp === "string" ? r.timestamp : null;
@@ -63,7 +66,7 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
     const content = r.message?.content;
 
     if (r.type === "assistant") {
-      if (typeof r.message?.model === "string") model = r.message.model;
+      if (typeof r.message?.model === "string") model = display(r.message.model, 80);
       // One API message is written once per content block with the same id and usage:
       // count messages and tokens once per id.
       const mid = r.message?.id;
@@ -86,7 +89,7 @@ export async function readDetail(path: string, opts: { events?: boolean } = {}):
           if (b?.type !== "tool_use") continue;
           totals.toolCalls++;
           if (SPAWN_TOOLS.has(b.name) && typeof b.id === "string") spawned.push(b.id);
-          push({ kind: "tool_use", ts, tool: String(b.name ?? "?"), text: display(describeInput(b.input), 400) });
+          push({ kind: "tool_use", ts, tool: display(String(b.name ?? "?"), 80), text: display(describeInput(b.input), 400) });
         }
       }
       continue;
