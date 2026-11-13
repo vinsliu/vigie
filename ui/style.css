@@ -102,6 +102,9 @@ header {
 .search input { width: 100%; padding-left: 34px; }
 .search svg { position: absolute; left: 11px; top: 9px; width: 15px; height: 15px; stroke: var(--muted); fill: none; stroke-width: 2; pointer-events: none; }
 .sp { flex: 1; }
+.conn { margin-left: auto; font-size: 13px; white-space: nowrap; color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+.conn[hidden] { display: none; }
+.conn + .status { margin-left: 12px; }
 .status { margin-left: auto; color: var(--muted); font-size: 13px; white-space: nowrap; }
 .menu { display: none; }
 .pop-wrap { position: relative; }
