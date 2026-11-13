@@ -13,10 +13,10 @@ export interface Tokens {
 }
 
 export interface Stats {
-  totals: { sessions: number; costUSD: number; tokens: Tokens };
+  totals: { sessions: number; unpriced: number; costUSD: number; tokens: Tokens };
   /** Last N calendar days (local time), oldest first, gaps filled with zeros. */
   days: { date: string; costUSD: number; tokens: Tokens; sessions: number }[];
-  projects: { project: string; sessions: number; costUSD: number; tokens: Tokens }[];
+  projects: { project: string; sessions: number; unpriced: number; costUSD: number; tokens: Tokens }[];
   models: { model: string; costUSD: number; tokens: Tokens }[];
 }
 
@@ -108,9 +108,9 @@ export async function computeStats(claudeDir: string, opts: StatsOptions = {}): 
   const sessions = await listSessions(claudeDir);
 
   const dayMap = new Map<string, { costUSD: number; tokens: Tokens; ids: Set<string> }>();
-  const projectMap = new Map<string, { sessions: number; costUSD: number; tokens: Tokens }>();
+  const projectMap = new Map<string, { sessions: number; unpriced: number; costUSD: number; tokens: Tokens }>();
   const modelMap = new Map<string, { costUSD: number; tokens: Tokens }>();
-  const totals = { sessions: 0, costUSD: 0, tokens: zero() };
+  const totals = { sessions: 0, unpriced: 0, costUSD: 0, tokens: zero() };
 
   for (const s of sessions) {
     let usage: Usage;
@@ -120,10 +120,15 @@ export async function computeStats(claudeDir: string, opts: StatsOptions = {}): 
       continue; // transcript vanished between listing and reading
     }
     const project = s.cwd ?? s.projectDir;
-    const proj = projectMap.get(project) ?? { sessions: 0, costUSD: 0, tokens: zero() };
+    const proj = projectMap.get(project) ?? { sessions: 0, unpriced: 0, costUSD: 0, tokens: zero() };
     projectMap.set(project, proj);
     proj.sessions++;
     totals.sessions++;
+    // A session whose cost Claude has not written yet (still running) is counted apart, never as $0.
+    if (usage.cost == null) {
+      proj.unpriced++;
+      totals.unpriced++;
+    }
     const cost = usage.cost ?? 0;
     proj.costUSD += cost;
     totals.costUSD += cost;
