@@ -85,7 +85,7 @@ export function layoutLane(items, from, to, { minBar = 2.2, dotHalf = 1.4, gap =
 
 /** Short, unambiguous project names: the folder name, plus its parent when two projects share one. */
 export function projectLabels(paths) {
-  const parts = (p) => String(p).split("/").filter(Boolean);
+  const parts = (p) => String(p).split(/[\\/]/).filter(Boolean); // POSIX and Windows separators
   const base = new Map();
   for (const p of paths) base.set(p, parts(p).slice(-1)[0] ?? String(p));
   const count = new Map();

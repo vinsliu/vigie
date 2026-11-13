@@ -100,4 +100,11 @@ describe("projectLabels", () => {
     assert.equal(labels.get("/a/code/shop"), "code/shop");
     assert.equal(labels.get("/b/work/shop"), "work/shop");
   });
+
+  it("understands Windows paths, drive letters and trailing separators", () => {
+    const labels = projectLabels(["C:\\Users\\me\\code\\blog", "C:\\Users\\me\\code\\shop\\", "D:\\work\\shop"]);
+    assert.equal(labels.get("C:\\Users\\me\\code\\blog"), "blog");
+    assert.equal(labels.get("C:\\Users\\me\\code\\shop\\"), "code/shop");
+    assert.equal(labels.get("D:\\work\\shop"), "work/shop");
+  });
 });

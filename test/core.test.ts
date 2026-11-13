@@ -177,6 +177,8 @@ describe("core", () => {
     const s = await computeStats(dir, { days: 5, now });
     assert.equal(s.totals.sessions, 1);
     assert.equal(s.totals.costUSD, 0.42);
+    assert.equal(s.totals.unpriced, 0, "this session has a recorded cost");
+    assert.equal(s.projects[0]?.unpriced, 0);
     assert.equal(s.totals.tokens.output, 20);
     assert.equal(s.totals.tokens.cacheRead, 100);
     assert.equal(s.days.length, 5);

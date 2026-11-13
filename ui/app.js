@@ -54,10 +54,33 @@ const sessionTitle = (s) => s.alias || s.title || s.firstPrompt || s.id;
 const projectKey = (s) => s.cwd ?? s.projectDir;
 const sessionHref = (s) => `#/s/${encodeURIComponent(s.id)}`;
 
+// status 0 means the server could not be reached at all.
+class ApiError extends Error {
+  constructor(status) {
+    super(`HTTP ${status}`);
+    this.status = status;
+  }
+}
 async function api(path) {
-  const r = await fetch(path);
-  if (!r.ok) throw new Error(`${r.status}`);
+  let r;
+  try {
+    r = await fetch(path);
+  } catch {
+    throw new ApiError(0);
+  }
+  if (!r.ok) throw new ApiError(r.status);
   return r.json();
+}
+/** One sentence saying what failed and why, instead of a bare "Could not load". */
+function failure(e, what) {
+  const status = e instanceof ApiError ? e.status : -1;
+  const why =
+    status === 0 ? "Vigie's server is not reachable. Is it still running?"
+    : status === 404 ? "it was not found (Claude may have deleted its transcript)."
+    : status === 400 || status === 403 || status === 413 ? `the server refused the request (${status}).`
+    : status >= 500 ? `the server hit an error (${status}); its terminal has the details.`
+    : "something unexpected happened; reloading the page may help.";
+  return `Could not ${what}: ${why}`;
 }
 
 // ---------- state ----------
@@ -94,7 +117,7 @@ function updateStatus(list, hiddenArchived = 0) {
 // ---------- tooltip ----------
 function bindTip(el, title, detail) {
   const show = (x, y) => {
-    tipEl.replaceChildren(h("b", {}, title), h("span", {}, detail));
+    tipEl.replaceChildren(h("b", {}, title), h("span", {}, typeof detail === "function" ? detail() : detail));
     tipEl.classList.add("on");
     tipEl.style.left = `${Math.max(8, Math.min(x + 14, innerWidth - 310))}px`;
     tipEl.style.top = `${y + 16}px`;
@@ -317,7 +340,7 @@ function markEl(m, s, rows, maxCost, trackPx) {
     },
     inside ? h("span", { class: "in" }, title) : null,
   );
-  bindTip(a, title, `${s.costUSD == null ? "cost recorded when it ends" : money(s.costUSD)} · ${s.model ?? "?"} · ${clientName(s.entrypoint)} · ${s.active ? "running now" : ago(s.updatedAt)}`);
+  bindTip(a, title, () => `${s.costUSD == null ? "cost recorded when it ends" : money(s.costUSD)} · ${s.model ?? "?"} · ${clientName(s.entrypoint)} · ${s.active ? "running now" : ago(s.updatedAt)}`);
   return a;
 }
 
@@ -420,7 +443,7 @@ function listCard(shown) {
             h("div", { class: "p" }, `${labels.get(projectKey(s))} · ${s.model ?? "?"}`),
           ),
           h("td", {}, clientName(s.entrypoint)),
-          h("td", {}, s.active ? "running now" : ago(s.updatedAt)),
+          h("td", {}, s.active ? "running now" : h("time", { dateTime: s.updatedAt, "data-ago": "" }, ago(s.updatedAt))),
           s.costUSD == null
             ? h("td", { class: "n" }, h("span", { class: "nocost", title: NO_COST }, "–"))
             : h("td", { class: "n" }, h("span", { class: "cb", style: { width: `${Math.max(3, (s.costUSD / max) * 60)}px` } }), money(s.costUSD)),
@@ -460,12 +483,17 @@ function drawSessions() {
 // ---------- session page ----------
 // Pin / rename / archive only change the dashboard's own metadata file, never Claude's transcripts.
 async function saveMeta(id, body) {
-  const r = await fetch(`/api/sessions/${encodeURIComponent(id)}/meta`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(String(r.status));
+  let r;
+  try {
+    r = await fetch(`/api/sessions/${encodeURIComponent(id)}/meta`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0);
+  }
+  if (!r.ok) throw new ApiError(r.status);
 }
 
 function actionsCard(s) {
@@ -474,8 +502,8 @@ function actionsCard(s) {
     try {
       await saveMeta(s.id, body);
       await route();
-    } catch {
-      msg.textContent = "Could not save.";
+    } catch (e) {
+      msg.textContent = failure(e, "save");
     }
   };
   const name = h("input", { type: "text", placeholder: "Display name", value: s.alias ?? "", maxLength: 120, "aria-label": "Display name (does not rename the session in Claude)" });
@@ -566,9 +594,9 @@ function agentsCard(sessionId, agents) {
       try {
         const r = await api(`/api/sessions/${encodeURIComponent(sessionId)}/agents/${encodeURIComponent(a.id)}`);
         body.replaceChildren(...r.events.map(eventEl), ...(r.truncated ? [truncatedNote(r)] : []));
-      } catch {
+      } catch (e) {
         loaded = false;
-        body.textContent = "Could not load this agent.";
+        body.textContent = failure(e, "load this agent");
       }
     });
     return det;
@@ -686,7 +714,8 @@ function table(headers, rows) {
 async function renderStats() {
   const days = state.statsDays;
   const s = await api(`/api/stats?days=${days}`);
-  const kpi = (label, value) => h("div", { class: "card kpi" }, h("small", {}, label), h("b", {}, value));
+  const kpi = (label, value, note) => h("div", { class: "card kpi" }, h("small", {}, label), h("b", {}, value), note ? h("small", { class: "muted" }, note) : null);
+  const unpriced = s.totals.unpriced;
   const last30 = s.days.reduce((n, d) => n + d.costUSD, 0);
   updateStatus(state.sessions.filter((x) => !x.archived));
   app.replaceChildren(
@@ -694,7 +723,7 @@ async function renderStats() {
     h(
       "div",
       { class: "kpis" },
-      kpi("Total cost", money(s.totals.costUSD)),
+      kpi("Total cost", money(s.totals.costUSD), unpriced ? `without ${unpriced} ${unpriced === 1 ? "session" : "sessions"} whose cost is not recorded yet` : null),
       kpi(`Last ${days} days (est.)`, money(last30)),
       kpi("Sessions", num(s.totals.sessions)),
       kpi("Output tokens", num(s.totals.tokens.output)),
@@ -710,7 +739,7 @@ async function renderStats() {
     h(
       "div",
       { class: "two" },
-      h("section", { class: "card" }, h("div", { class: "ch" }, h("h2", {}, "By project")), table(["Project", "Sessions", "Cost", "Output tokens"], s.projects.map((p) => [p.project, p.sessions, money(p.costUSD), num(p.tokens.output)]))),
+      h("section", { class: "card" }, h("div", { class: "ch" }, h("h2", {}, "By project")), table(["Project", "Sessions", "Cost", "Output tokens"], s.projects.map((p) => [p.project, p.sessions, money(p.unpriced === p.sessions ? null : p.costUSD), num(p.tokens.output)]))),
       h("section", { class: "card" }, h("div", { class: "ch" }, h("h2", {}, "By model")), table(["Model", "Cost", "Input", "Output", "Cache read"], s.models.map((m) => [m.model, money(m.costUSD), num(m.tokens.input), num(m.tokens.output), num(m.tokens.cacheRead)]))),
     ),
   );
@@ -736,8 +765,9 @@ async function route({ keepSide = false } = {}) {
       if (view === "stats") await renderStats();
       else drawSessions();
     }
-  } catch {
-    app.replaceChildren(h("div", { class: "card empty" }, "Could not load data."));
+  } catch (e) {
+    const what = currentView() === "detail" ? "load this session" : currentView() === "stats" ? "load the statistics" : "load the sessions";
+    app.replaceChildren(h("div", { class: "card empty", role: "alert" }, failure(e, what)));
   }
 }
 addEventListener("hashchange", () => {
@@ -777,7 +807,27 @@ addEventListener("keydown", (e) => {
 let timer;
 const pending = new Set(); // sessions that changed since the last refresh
 let everything = false; // a change no session explains: reload it all
-new EventSource("/api/events").addEventListener("change", (e) => {
+// Relative times ("5 min ago") keep counting between data refreshes.
+setInterval(() => {
+  for (const t of document.querySelectorAll("time[data-ago]")) t.textContent = ago(t.dateTime);
+}, 30_000);
+
+// The browser reconnects by itself; the header just says so, and the data is reloaded once it is back.
+const connEl = $("#conn");
+const events = new EventSource("/api/events");
+let wasDown = false;
+events.addEventListener("error", () => {
+  wasDown = true;
+  connEl.hidden = false;
+});
+events.addEventListener("open", () => {
+  connEl.hidden = true;
+  if (wasDown) {
+    wasDown = false;
+    route({ keepSide: true });
+  }
+});
+events.addEventListener("change", (e) => {
   try {
     const ids = JSON.parse(e.data).sessions;
     if (Array.isArray(ids)) ids.forEach((id) => pending.add(id));
